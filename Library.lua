@@ -407,7 +407,8 @@ local Templates = {
         EnableSidebarResize = false,
         EnableCompacting = true,
         DisableCompactingSnap = false,
-        SidebarCompacted = false,
+        SidebarCompacted = true,
+        SidebarCompactOnHover = true,
         MinContainerWidth = 256,
 
         --// Snapping \\--
@@ -420,6 +421,7 @@ local Templates = {
 
         --// Background \\--
         BackgroundImage = "",
+        BackgroundTransparency = 0.6,
 
         --// Animations \\--
         Animations = {
@@ -11040,9 +11042,10 @@ function Library:CreateWindow(WindowInfo)
         AvoidCoreGui = WindowInfo.SnapAvoidCoreGui,
     }
 
-    local InitialLeftWidth = math.ceil(WindowInfo.Size.X.Offset * 0.3)
+    local ExpandedLeftWidth = math.ceil(WindowInfo.Size.X.Offset * 0.3)
     local IsCompact = WindowInfo.SidebarCompacted
-    local LastExpandedWidth = InitialLeftWidth
+    local LastExpandedWidth = ExpandedLeftWidth
+    local InitialLeftWidth = IsCompact and WindowInfo.SidebarCompactWidth or ExpandedLeftWidth
 
     do
         Library.KeybindFrame, Library.KeybindContainer = Library:AddDraggableMenu("Keybinds")
@@ -11054,6 +11057,7 @@ function Library:CreateWindow(WindowInfo)
             BackgroundColor3 = function()
                 return Library:GetBetterColor(Library.Scheme.BackgroundColor, -1)
             end,
+            BackgroundTransparency = WindowInfo.BackgroundTransparency,
             Name = "Main",
             Text = "",
             Position = WindowInfo.Position,
@@ -11150,20 +11154,18 @@ function Library:CreateWindow(WindowInfo)
         --// Title \\--
         TitleHolder = New("Frame", {
             BackgroundTransparency = 1,
+            ClipsDescendants = true,
             Size = UDim2.new(0, InitialLeftWidth, 1, 0),
             Parent = TopBar,
         })
-        New("UIListLayout", {
-            FillDirection = Enum.FillDirection.Horizontal,
-            HorizontalAlignment = Enum.HorizontalAlignment.Center,
-            VerticalAlignment = Enum.VerticalAlignment.Center,
-            Padding = UDim.new(0, 6),
-            Parent = TitleHolder,
-        })
 
+        local IconXCenter = math.floor(WindowInfo.SidebarCompactWidth / 2)
         if WindowInfo.Icon then
             local Icon = Library:GetCustomIcon(WindowInfo.Icon)
             WindowIcon = New("ImageLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundTransparency = 1,
+                Position = UDim2.new(0, IconXCenter, 0.5, 0),
                 Size = WindowInfo.IconSize,
                 Parent = TitleHolder,
             })
@@ -11172,28 +11174,30 @@ function Library:CreateWindow(WindowInfo)
             end
         else
             WindowIcon = New("TextLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
                 BackgroundTransparency = 1,
+                Position = UDim2.new(0, IconXCenter, 0.5, 0),
                 Size = WindowInfo.IconSize,
                 Text = WindowInfo.Title:sub(1, 1),
                 TextScaled = true,
-                Visible = false,
+                Visible = IsCompact,
+                TextTransparency = IsCompact and 0 or 1,
                 Parent = TitleHolder,
             })
         end
 
-        local X = Library:GetTextBounds(
-            WindowInfo.Title,
-            Library.Scheme.Font,
-            20,
-            (TitleHolder.AbsoluteSize.X / Library.DPIScale) - (WindowInfo.Icon and WindowInfo.IconSize.X.Offset + 6 or 0) - 12
-        )
         WindowTitle = New("TextLabel", {
+            AnchorPoint = Vector2.new(0, 0.5),
             BackgroundTransparency = 1,
-            Size = UDim2.new(0, X, 1, 0),
+            Position = UDim2.new(0, WindowInfo.SidebarCompactWidth + 4, 0.5, 0),
+            Size = UDim2.new(1, -WindowInfo.SidebarCompactWidth - 8, 1, 0),
             Text = WindowInfo.Title,
             TextSize = 20,
             TextTruncate = Enum.TextTruncate.AtEnd,
+            TextXAlignment = Enum.TextXAlignment.Left,
             TextYAlignment = Enum.TextYAlignment.Center,
+            TextTransparency = IsCompact and 1 or 0,
+            Visible = not IsCompact,
             Parent = TitleHolder,
         })
 
@@ -11215,14 +11219,14 @@ function Library:CreateWindow(WindowInfo)
         })
 
         CurrentTabInfo = New("Frame", {
-            Size = UDim2.fromScale(WindowInfo.DisableSearch and 1 or 0.5, 1),
+            Size = UDim2.fromScale(WindowInfo.DisableSearch and 1 or 0.35, 1),
             Visible = false,
             BackgroundTransparency = 1,
             Parent = RightWrapper,
         })
 
         New("UIFlexItem", {
-            FlexMode = Enum.UIFlexMode.Grow,
+            FlexMode = Enum.UIFlexMode.Shrink,
             Parent = CurrentTabInfo,
         })
 
@@ -11268,11 +11272,12 @@ function Library:CreateWindow(WindowInfo)
             PlaceholderText = "Search",
             Size = WindowInfo.SearchbarSize,
             TextScaled = true,
+            TextXAlignment = Enum.TextXAlignment.Center,
             Visible = not (WindowInfo.DisableSearch or false),
             Parent = RightWrapper,
         })
         New("UIFlexItem", {
-            FlexMode = Enum.UIFlexMode.Shrink,
+            FlexMode = Enum.UIFlexMode.Grow,
             Parent = SearchBox,
         })
         table.insert(
@@ -11348,6 +11353,7 @@ function Library:CreateWindow(WindowInfo)
             BackgroundColor3 = function()
                 return Library:GetBetterColor(Library.Scheme.BackgroundColor, 4)
             end,
+            BackgroundTransparency = 1,
             Position = UDim2.fromScale(0, 1),
             Size = UDim2.new(1, 0, 0, math.max(20, WindowInfo.CornerRadius * 2)),
             ZIndex = 3,
@@ -11420,6 +11426,7 @@ function Library:CreateWindow(WindowInfo)
         Tabs = New("ScrollingFrame", {
             AutomaticCanvasSize = Enum.AutomaticSize.Y,
             BackgroundColor3 = "BackgroundColor",
+            BackgroundTransparency = 1,
             CanvasSize = UDim2.fromScale(0, 0),
             Position = UDim2.fromOffset(0, 49),
             ScrollBarImageTransparency = 1,
@@ -11445,6 +11452,7 @@ function Library:CreateWindow(WindowInfo)
             BackgroundColor3 = function()
                 return Library:GetBetterColor(Library.Scheme.BackgroundColor, 1)
             end,
+            BackgroundTransparency = 1,
             ClipsDescendants = true,
             Name = "Container",
             Position = UDim2.new(1, 0, 0, 49),
@@ -11480,6 +11488,9 @@ function Library:CreateWindow(WindowInfo)
 
         WindowTitle.Text = title
         WindowInfo.Title = title
+        if not WindowInfo.Icon and WindowIcon:IsA("TextLabel") then
+            WindowIcon.Text = title:sub(1, 1)
+        end
     end
 
     function Window:SetBackgroundImage(Image: string)
@@ -11687,6 +11698,87 @@ function Library:CreateWindow(WindowInfo)
         end
     end
 
+    local CompactTween = nil
+    local WidthValue = Instance.new("NumberValue")
+    WidthValue.Value = InitialLeftWidth
+
+    local function SetSidebarWidthInstant(Width)
+        Width = math.clamp(Width, WindowInfo.SidebarCompactWidth, MainFrame.Size.X.Offset - WindowInfo.MinContainerWidth - 1)
+        DividerLine.Position = UDim2.fromOffset(Width, 0)
+        TitleHolder.Size = UDim2.new(0, Width, 1, 0)
+        RightWrapper.Size = UDim2.new(1, -Width - 57 - 1, 1, -16)
+        Tabs.Size = UDim2.new(0, Width, 1, -70)
+        Container.Size = UDim2.new(1, -Width - 1, 1, -70)
+    end
+
+    WidthValue.Changed:Connect(function(val)
+        SetSidebarWidthInstant(val)
+    end)
+
+    local function AnimateCompact(Compact: boolean)
+        if IsCompact == Compact and CompactTween ~= nil then
+            return
+        end
+        IsCompact = Compact
+
+        local TargetWidth = Compact and WindowInfo.SidebarCompactWidth or LastExpandedWidth
+        local TweenDuration = 0.22
+        local AnimInfo = TweenInfo.new(TweenDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+        if CompactTween then
+            CompactTween:Cancel()
+            CompactTween = nil
+        end
+
+        WidthValue.Value = Tabs.Size.X.Offset
+        CompactTween = TweenService:Create(WidthValue, AnimInfo, { Value = TargetWidth })
+        CompactTween:Play()
+
+        if Compact then
+            TweenService:Create(WindowTitle, AnimInfo, { TextTransparency = 1 }):Play()
+            if not WindowInfo.Icon and WindowIcon:IsA("TextLabel") then
+                WindowIcon.Visible = true
+                TweenService:Create(WindowIcon, AnimInfo, { TextTransparency = 0 }):Play()
+            end
+
+            for _, Button in Library.TabButtons do
+                if Button.Label then
+                    TweenService:Create(Button.Label, AnimInfo, { TextTransparency = 1 }):Play()
+                end
+            end
+
+            task.delay(TweenDuration, function()
+                if IsCompact then
+                    WindowTitle.Visible = false
+                    for _, Button in Library.TabButtons do
+                        if Button.Label then
+                            Button.Label.Visible = false
+                        end
+                    end
+                end
+            end)
+        else
+            WindowTitle.Visible = true
+            TweenService:Create(WindowTitle, AnimInfo, { TextTransparency = 0 }):Play()
+            if not WindowInfo.Icon and WindowIcon:IsA("TextLabel") then
+                TweenService:Create(WindowIcon, AnimInfo, { TextTransparency = 1 }):Play()
+                task.delay(TweenDuration, function()
+                    if not IsCompact then
+                        WindowIcon.Visible = false
+                    end
+                end)
+            end
+
+            for _, Button in Library.TabButtons do
+                if Button.Label then
+                    Button.Label.Visible = true
+                    local TargetTrans = (Library.ActiveTab and Library.ActiveTab.TabButton == Button.Button) and 0 or 0.5
+                    TweenService:Create(Button.Label, AnimInfo, { TextTransparency = TargetTrans }):Play()
+                end
+            end
+        end
+    end
+
     local function ApplyCompact()
         IsCompact = Window:GetSidebarWidth() == WindowInfo.SidebarCompactWidth
         if WindowInfo.DisableCompactingSnap then
@@ -11694,21 +11786,18 @@ function Library:CreateWindow(WindowInfo)
         end
 
         WindowTitle.Visible = not IsCompact
-        if not WindowInfo.Icon then
+        WindowTitle.TextTransparency = IsCompact and 1 or 0
+        if not WindowInfo.Icon and WindowIcon:IsA("TextLabel") then
             WindowIcon.Visible = IsCompact
+            WindowIcon.TextTransparency = IsCompact and 0 or 1
         end
 
         for _, Button in Library.TabButtons do
-            if not Button.Icon then
-                continue
+            if Button.Label then
+                Button.Label.Visible = not IsCompact
+                local TargetTrans = (Library.ActiveTab and Library.ActiveTab.TabButton == Button.Button) and 0 or 0.5
+                Button.Label.TextTransparency = IsCompact and 1 or TargetTrans
             end
-
-            Button.Label.Visible = not IsCompact
-            Button.Padding.PaddingBottom = UDim.new(0, IsCompact and 6 or 11)
-            Button.Padding.PaddingLeft = UDim.new(0, IsCompact and 6 or 12)
-            Button.Padding.PaddingRight = UDim.new(0, IsCompact and 6 or 12)
-            Button.Padding.PaddingTop = UDim.new(0, IsCompact and 6 or 11)
-            Button.Icon.SizeConstraint = IsCompact and Enum.SizeConstraint.RelativeXY or Enum.SizeConstraint.RelativeYY
         end
     end
 
@@ -11716,8 +11805,16 @@ function Library:CreateWindow(WindowInfo)
         return IsCompact
     end
 
-    function Window:SetCompact(State)
-        Window:SetSidebarWidth(State and WindowInfo.SidebarCompactWidth or LastExpandedWidth)
+    function Window:SetCompact(State, Animated)
+        if Animated ~= false then
+            AnimateCompact(State)
+        else
+            IsCompact = State
+            local Width = State and WindowInfo.SidebarCompactWidth or LastExpandedWidth
+            WidthValue.Value = Width
+            SetSidebarWidthInstant(Width)
+            ApplyCompact()
+        end
     end
 
     function Window:GetSidebarWidth()
@@ -11725,14 +11822,9 @@ function Library:CreateWindow(WindowInfo)
     end
 
     function Window:SetSidebarWidth(Width)
-        Width = math.clamp(Width, 48, MainFrame.Size.X.Offset - WindowInfo.MinContainerWidth - 1)
-
-        DividerLine.Position = UDim2.fromOffset(Width, 0)
-
-        TitleHolder.Size = UDim2.new(0, Width, 1, 0)
-        RightWrapper.Size = UDim2.new(1, -Width - 57 - 1, 1, -16)
-        Tabs.Size = UDim2.new(0, Width, 1, -70)
-        Container.Size = UDim2.new(1, -Width - 1, 1, -70)
+        Width = math.clamp(Width, WindowInfo.SidebarCompactWidth, MainFrame.Size.X.Offset - WindowInfo.MinContainerWidth - 1)
+        WidthValue.Value = Width
+        SetSidebarWidthInstant(Width)
 
         if WindowInfo.EnableCompacting then
             ApplyCompact()
@@ -11742,12 +11834,78 @@ function Library:CreateWindow(WindowInfo)
         end
     end
 
+    function Window:SetBackgroundTransparency(Transparency: number)
+        assert(typeof(Transparency) == "number", "Expected number for Transparency got: " .. typeof(Transparency))
+        WindowInfo.BackgroundTransparency = Transparency
+        MainFrame.BackgroundTransparency = Transparency
+    end
+
+    local SidebarHovered = false
+    local HoverCheckThread = nil
+
+    local function CheckMouseInSidebar()
+        if not MainFrame.Visible then
+            return false
+        end
+        local MousePos = UserInputService:GetMouseLocation()
+        local FramePos = MainFrame.AbsolutePosition
+        local FrameSize = MainFrame.AbsoluteSize
+        local CurrentSidebarWidth = math.max(Tabs.AbsoluteSize.X, WindowInfo.SidebarCompactWidth)
+
+        local InX = MousePos.X >= FramePos.X and MousePos.X <= (FramePos.X + CurrentSidebarWidth + 4)
+        local InY = MousePos.Y >= FramePos.Y and MousePos.Y <= (FramePos.Y + FrameSize.Y)
+        return InX and InY
+    end
+
+    local function OnSidebarHoverChanged(Hovering: boolean)
+        if not WindowInfo.SidebarCompactOnHover then
+            return
+        end
+
+        if Hovering then
+            SidebarHovered = true
+            if HoverCheckThread then
+                task.cancel(HoverCheckThread)
+                HoverCheckThread = nil
+            end
+            if IsCompact then
+                AnimateCompact(false)
+            end
+        else
+            SidebarHovered = false
+            if HoverCheckThread then
+                task.cancel(HoverCheckThread)
+            end
+            HoverCheckThread = task.delay(0.08, function()
+                if not SidebarHovered and not CheckMouseInSidebar() then
+                    if not IsCompact then
+                        AnimateCompact(true)
+                    end
+                end
+            end)
+        end
+    end
+
+    Tabs.MouseEnter:Connect(function()
+        OnSidebarHoverChanged(true)
+    end)
+    Tabs.MouseLeave:Connect(function()
+        OnSidebarHoverChanged(false)
+    end)
+
+    TitleHolder.MouseEnter:Connect(function()
+        OnSidebarHoverChanged(true)
+    end)
+    TitleHolder.MouseLeave:Connect(function()
+        OnSidebarHoverChanged(false)
+    end)
+
     function Window:ShowTabInfo(Name, Description)
         CurrentTabLabel.Text = Name
         CurrentTabDescription.Text = Description
 
         if IsDefaultSearchbarSize then
-            SearchBox.Size = UDim2.fromScale(0.5, 1)
+            SearchBox.Size = UDim2.fromScale(0.65, 1)
         end
         CurrentTabInfo.Visible = true
     end
@@ -11826,43 +11984,43 @@ function Library:CreateWindow(WindowInfo)
 
             local ButtonHolder = New("Frame", {
                 BackgroundTransparency = 1,
+                ClipsDescendants = true,
                 Size = UDim2.fromScale(1, 1),
                 Parent = TabButton,
             })
-            local ButtonPadding = New("UIPadding", {
-                PaddingBottom = UDim.new(0, IsCompact and 6 or 11),
-                PaddingLeft = UDim.new(0, IsCompact and 6 or 12),
-                PaddingRight = UDim.new(0, IsCompact and 6 or 12),
-                PaddingTop = UDim.new(0, IsCompact and 6 or 11),
-                Parent = ButtonHolder,
-            })
-            TabLabel = New("TextLabel", {
-                BackgroundTransparency = 1,
-                Position = UDim2.fromOffset(30, 0),
-                Size = UDim2.new(1, -30, 1, 0),
-                Text = Name,
-                TextSize = 16,
-                TextTransparency = 0.5,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                Visible = not IsCompact,
-                Parent = ButtonHolder,
-            })
 
+            local IconXCenter = math.floor(WindowInfo.SidebarCompactWidth / 2)
             if Icon then
                 TabIcon = New("ImageLabel", {
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    BackgroundTransparency = 1,
                     ImageColor3 = Icon.Custom and "WhiteColor" or "AccentColor",
                     ImageTransparency = 0.5,
                     ScaleType = Enum.ScaleType.Fit,
-                    Size = UDim2.fromScale(1, 1),
-                    SizeConstraint = IsCompact and Enum.SizeConstraint.RelativeXY or Enum.SizeConstraint.RelativeYY,
+                    Size = UDim2.fromOffset(20, 20),
+                    Position = UDim2.new(0, IconXCenter, 0.5, 0),
                     Parent = ButtonHolder,
                 })
                 Library:ApplyLucideIcon(TabIcon, Icon)
             end
 
+            TabLabel = New("TextLabel", {
+                AnchorPoint = Vector2.new(0, 0.5),
+                BackgroundTransparency = 1,
+                Position = UDim2.new(0, WindowInfo.SidebarCompactWidth + 4, 0.5, 0),
+                Size = UDim2.new(1, -WindowInfo.SidebarCompactWidth - 8, 1, 0),
+                Text = Name,
+                TextSize = 16,
+                TextTransparency = IsCompact and 1 or 0.5,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Visible = not IsCompact,
+                Parent = ButtonHolder,
+            })
+
             table.insert(Library.TabButtons, {
+                Button = TabButton,
                 Label = TabLabel,
-                Padding = ButtonPadding,
                 Icon = TabIcon,
             })
 
@@ -12952,9 +13110,11 @@ function Library:CreateWindow(WindowInfo)
                 return
             end
 
-            TweenService:Create(TabLabel, Library.TweenInfo, {
-                TextTransparency = Hovering and 0.25 or 0.5,
-            }):Play()
+            if not IsCompact then
+                TweenService:Create(TabLabel, Library.TweenInfo, {
+                    TextTransparency = Hovering and 0.25 or 0.5,
+                }):Play()
+            end
             if TabIcon then
                 TweenService:Create(TabIcon, Library.TweenInfo, {
                     ImageTransparency = Hovering and 0.25 or 0.5,
@@ -12971,6 +13131,8 @@ function Library:CreateWindow(WindowInfo)
                 Library.ActiveTab:Hide()
             end
 
+            Tab.TabButton = TabButton
+
             TweenService:Create(TabButton, Library.TweenInfo, {
                 BackgroundTransparency = 0,
             }):Play()
@@ -12979,9 +13141,13 @@ function Library:CreateWindow(WindowInfo)
                     BackgroundTransparency = 0,
                 }):Play()
             end
-            TweenService:Create(TabLabel, Library.TweenInfo, {
-                TextTransparency = 0,
-            }):Play()
+            if not IsCompact then
+                TweenService:Create(TabLabel, Library.TweenInfo, {
+                    TextTransparency = 0,
+                }):Play()
+            else
+                TabLabel.TextTransparency = 1
+            end
             if TabIcon then
                 TweenService:Create(TabIcon, Library.TweenInfo, {
                     ImageTransparency = 0,
@@ -13013,9 +13179,13 @@ function Library:CreateWindow(WindowInfo)
                 }):Play()
             end
 
-            TweenService:Create(TabLabel, Library.TweenInfo, {
-                TextTransparency = 0.5,
-            }):Play()
+            if not IsCompact then
+                TweenService:Create(TabLabel, Library.TweenInfo, {
+                    TextTransparency = 0.5,
+                }):Play()
+            else
+                TabLabel.TextTransparency = 1
+            end
 
             if TabIcon then
                 TweenService:Create(TabIcon, Library.TweenInfo, {
@@ -13118,9 +13288,11 @@ function Library:CreateWindow(WindowInfo)
         end
 
         TabButton.MouseEnter:Connect(function()
+            OnSidebarHoverChanged(true)
             Tab:Hover(true)
         end)
         TabButton.MouseLeave:Connect(function()
+            OnSidebarHoverChanged(false)
             Tab:Hover(false)
         end)
         TabButton.MouseButton1Click:Connect(Tab.Show)
@@ -13197,44 +13369,43 @@ function Library:CreateWindow(WindowInfo)
 
             local ButtonHolder = New("Frame", {
                 BackgroundTransparency = 1,
+                ClipsDescendants = true,
                 Size = UDim2.fromScale(1, 1),
                 Parent = TabButton,
             })
-            local ButtonPadding = New("UIPadding", {
-                PaddingBottom = UDim.new(0, IsCompact and 6 or 11),
-                PaddingLeft = UDim.new(0, IsCompact and 6 or 12),
-                PaddingRight = UDim.new(0, IsCompact and 6 or 12),
-                PaddingTop = UDim.new(0, IsCompact and 6 or 11),
-                Parent = ButtonHolder,
-            })
 
-            TabLabel = New("TextLabel", {
-                BackgroundTransparency = 1,
-                Position = UDim2.fromOffset(30, 0),
-                Size = UDim2.new(1, -30, 1, 0),
-                Text = Name,
-                TextSize = 16,
-                TextTransparency = 0.5,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                Visible = not IsCompact,
-                Parent = ButtonHolder,
-            })
-
+            local IconXCenter = math.floor(WindowInfo.SidebarCompactWidth / 2)
             if Icon then
                 TabIcon = New("ImageLabel", {
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    BackgroundTransparency = 1,
                     ImageColor3 = Icon.Custom and "WhiteColor" or "AccentColor",
                     ImageTransparency = 0.5,
                     ScaleType = Enum.ScaleType.Fit,
-                    Size = UDim2.fromScale(1, 1),
-                    SizeConstraint = IsCompact and Enum.SizeConstraint.RelativeXY or Enum.SizeConstraint.RelativeYY,
+                    Size = UDim2.fromOffset(20, 20),
+                    Position = UDim2.new(0, IconXCenter, 0.5, 0),
                     Parent = ButtonHolder,
                 })
                 Library:ApplyLucideIcon(TabIcon, Icon)
             end
 
+            TabLabel = New("TextLabel", {
+                AnchorPoint = Vector2.new(0, 0.5),
+                BackgroundTransparency = 1,
+                Position = UDim2.new(0, WindowInfo.SidebarCompactWidth + 4, 0.5, 0),
+                Size = UDim2.new(1, -WindowInfo.SidebarCompactWidth - 8, 1, 0),
+                Text = Name,
+                TextSize = 16,
+                TextTransparency = IsCompact and 1 or 0.5,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Visible = not IsCompact,
+                Parent = ButtonHolder,
+            })
+
             table.insert(Library.TabButtons, {
+                Button = TabButton,
                 Label = TabLabel,
-                Padding = ButtonPadding,
                 Icon = TabIcon,
             })
 
@@ -13405,9 +13576,11 @@ function Library:CreateWindow(WindowInfo)
                 return
             end
 
-            TweenService:Create(TabLabel, Library.TweenInfo, {
-                TextTransparency = Hovering and 0.25 or 0.5,
-            }):Play()
+            if not IsCompact then
+                TweenService:Create(TabLabel, Library.TweenInfo, {
+                    TextTransparency = Hovering and 0.25 or 0.5,
+                }):Play()
+            end
             if TabIcon then
                 TweenService:Create(TabIcon, Library.TweenInfo, {
                     ImageTransparency = Hovering and 0.25 or 0.5,
@@ -13424,6 +13597,8 @@ function Library:CreateWindow(WindowInfo)
                 Library.ActiveTab:Hide()
             end
 
+            Tab.TabButton = TabButton
+
             TweenService:Create(TabButton, Library.TweenInfo, {
                 BackgroundTransparency = 0,
             }):Play()
@@ -13434,9 +13609,13 @@ function Library:CreateWindow(WindowInfo)
                 }):Play()
             end
 
-            TweenService:Create(TabLabel, Library.TweenInfo, {
-                TextTransparency = 0,
-            }):Play()
+            if not IsCompact then
+                TweenService:Create(TabLabel, Library.TweenInfo, {
+                    TextTransparency = 0,
+                }):Play()
+            else
+                TabLabel.TextTransparency = 1
+            end
 
             if TabIcon then
                 TweenService:Create(TabIcon, Library.TweenInfo, {
@@ -13470,9 +13649,13 @@ function Library:CreateWindow(WindowInfo)
                 }):Play()
             end
 
-            TweenService:Create(TabLabel, Library.TweenInfo, {
-                TextTransparency = 0.5,
-            }):Play()
+            if not IsCompact then
+                TweenService:Create(TabLabel, Library.TweenInfo, {
+                    TextTransparency = 0.5,
+                }):Play()
+            else
+                TabLabel.TextTransparency = 1
+            end
 
             if TabIcon then
                 TweenService:Create(TabIcon, Library.TweenInfo, {
@@ -13518,9 +13701,11 @@ function Library:CreateWindow(WindowInfo)
         end
 
         TabButton.MouseEnter:Connect(function()
+            OnSidebarHoverChanged(true)
             Tab:Hover(true)
         end)
         TabButton.MouseLeave:Connect(function()
+            OnSidebarHoverChanged(false)
             Tab:Hover(false)
         end)
         TabButton.MouseButton1Click:Connect(Tab.Show)

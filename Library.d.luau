@@ -963,6 +963,7 @@ export type Window = {
     ChangeTitle: (self: Window, Title: string) -> (),
     SetBackgroundImage: (self: Window, Image: string) -> (),
     SetFooter: (self: Window, Footer: string) -> (),
+    SetBackgroundTransparency: (self: Window, Transparency: number) -> (),
     SetAlwaysOnTop: (self: Window, Enabled: boolean) -> (),
     SetCornerRadius: (self: Window, Radius: number) -> (),
     SetSnapping: (
@@ -1192,6 +1193,7 @@ export type Library = {
             Icon: string?,
             IconSize: UDim2?,
             BackgroundImage: string?,
+            BackgroundTransparency: number?,
             AutoShow: boolean?,
             Center: boolean?,
             Resizable: boolean?,
@@ -1211,6 +1213,7 @@ export type Library = {
             EnableCompacting: boolean?,
             DisableCompactingSnap: boolean?,
             SidebarCompacted: boolean?,
+            SidebarCompactOnHover: boolean?,
             MinContainerWidth: number?,
             MinSidebarWidth: number?,
             SidebarCompactWidth: number?,
