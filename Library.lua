@@ -222,7 +222,7 @@ local Library = {
     TabSwipeOffset = 26,
     TabSwipeFrom = "bottom",
 
-    WindowAnimationInfo = TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    WindowAnimationInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
     DropdownTransitionInfo = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     KeyPickerTransitionInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
 
@@ -230,7 +230,7 @@ local Library = {
     RotatingChevronTweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
 
     Animations = {
-        ToggleWindow = false,
+        ToggleWindow = true,
         TabSwitch = false,
         Groupbox = false,
         Dropdown = false,
@@ -411,6 +411,11 @@ local Templates = {
         DisableCompactingSnap = false,
         SidebarCompacted = true,
         SidebarCompactOnHover = true,
+        ProfilePanel = true,
+        ProfileUsername = nil,
+        ProfileRole = "Free",
+        ProfileImage = nil,
+        ProfileUserId = nil,
         MinContainerWidth = 256,
 
         --// Snapping \\--
@@ -427,7 +432,7 @@ local Templates = {
 
         --// Animations \\--
         Animations = {
-            ToggleWindow = false,
+            ToggleWindow = true,
             TabSwitch = false,
             Groupbox = false,
             Dropdown = false,
@@ -2576,7 +2581,7 @@ function Library:AddBlank(Frame: GuiObject, Size: UDim2)
 end
 
 --// Animations \\--
-local TransparencyCache = {}
+local TransparencyCache = setmetatable({}, { __mode = "k" })
 local ActiveTabTweens = setmetatable({}, { __mode = "k" })
 
 function Library:PlayTabAnimation(Tab, Showing: boolean, OnComplete: (() -> ())?)
@@ -11037,6 +11042,12 @@ function Library:CreateWindow(WindowInfo)
     local BottomBackgroundCorner
     local FooterLabel
     local FooterGradient
+    local MainScale
+    local ProfilePanel
+    local ProfileDivider
+    local ProfileImage
+    local ProfileUsernameLabel
+    local ProfileRoleLabel
     local TopBar
     local WindowSnapConfig = {
         Enabled = WindowInfo.Snapping,
@@ -11075,12 +11086,10 @@ function Library:CreateWindow(WindowInfo)
                 Parent = MainFrame,
             })
         )
-        table.insert(
-            Library.Scales,
-            New("UIScale", {
-                Parent = MainFrame,
-            })
-        )
+        MainScale = New("UIScale", {
+            Parent = MainFrame,
+        })
+        table.insert(Library.Scales, MainScale)
         Library:AddOutline(MainFrame)
         Library:MakeLine(MainFrame, {
             Position = UDim2.fromOffset(0, 48),
@@ -11492,6 +11501,9 @@ function Library:CreateWindow(WindowInfo)
         end
 
         --// Tabs \\--
+        local ProfilePanelEnabled = WindowInfo.ProfilePanel ~= false
+        local ProfilePanelHeight = 48
+
         Tabs = New("ScrollingFrame", {
             AutomaticCanvasSize = Enum.AutomaticSize.Y,
             BackgroundColor3 = "BackgroundColor",
@@ -11500,7 +11512,7 @@ function Library:CreateWindow(WindowInfo)
             Position = UDim2.fromOffset(0, 49),
             ScrollBarImageTransparency = 1,
             ScrollBarThickness = 0,
-            Size = UDim2.new(0, InitialLeftWidth, 1, -70),
+            Size = UDim2.new(0, InitialLeftWidth, 1, ProfilePanelEnabled and -119 or -70),
             Parent = MainFrame,
         })
         New("UIListLayout", {
@@ -11513,6 +11525,113 @@ function Library:CreateWindow(WindowInfo)
             PaddingRight = UDim.new(0, TabButtonsStyle.Padding),
             PaddingTop = UDim.new(0, TabButtonsStyle.Padding),
             Parent = Tabs,
+        })
+
+        --// Profile Panel \\--
+        ProfileDivider = New("Frame", {
+            BackgroundColor3 = "OutlineColor",
+            BorderSizePixel = 0,
+            Position = UDim2.new(0, 0, 1, -69),
+            Size = UDim2.new(0, InitialLeftWidth, 0, 1),
+            ZIndex = 2,
+            Visible = ProfilePanelEnabled,
+            Parent = MainFrame,
+        })
+
+        ProfilePanel = New("Frame", {
+            BackgroundTransparency = 1,
+            ClipsDescendants = true,
+            Name = "ProfilePanel",
+            Position = UDim2.new(0, 0, 1, -68),
+            Size = UDim2.new(0, InitialLeftWidth, 0, ProfilePanelHeight),
+            ZIndex = 3,
+            Visible = ProfilePanelEnabled,
+            Parent = MainFrame,
+        })
+
+        local PlayerUserId = WindowInfo.ProfileUserId or (LocalPlayer and LocalPlayer.UserId) or 0
+        local AvatarThumb = WindowInfo.ProfileImage or "rbxassetid://0"
+        if not WindowInfo.ProfileImage and PlayerUserId > 0 then
+            AvatarThumb = string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150", PlayerUserId)
+        end
+
+        local AvatarXCenter = math.floor(WindowInfo.SidebarCompactWidth / 2)
+        ProfileImage = New("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundColor3 = "DarkColor",
+            BackgroundTransparency = 0.5,
+            Position = UDim2.new(0, AvatarXCenter, 0.5, 0),
+            Size = UDim2.fromOffset(30, 30),
+            Image = AvatarThumb,
+            ScaleType = Enum.ScaleType.Fit,
+            Parent = ProfilePanel,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(1, 0),
+            Parent = ProfileImage,
+        })
+        New("UIStroke", {
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+            Color = "OutlineColor",
+            Thickness = 1,
+            Parent = ProfileImage,
+        })
+
+        if not WindowInfo.ProfileImage and PlayerUserId > 0 then
+            task.spawn(function()
+                local success, content = pcall(function()
+                    return Players:GetUserThumbnailAsync(
+                        PlayerUserId,
+                        Enum.ThumbnailType.HeadShot,
+                        Enum.ThumbnailSize.Size150x150
+                    )
+                end)
+                if success and content and ProfileImage and ProfileImage.Parent then
+                    ProfileImage.Image = content
+                end
+            end)
+        end
+
+        local TextsFrame = New("Frame", {
+            AnchorPoint = Vector2.new(0, 0.5),
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, WindowInfo.SidebarCompactWidth + 4, 0.5, 0),
+            Size = UDim2.new(1, -WindowInfo.SidebarCompactWidth - 8, 1, 0),
+            ClipsDescendants = true,
+            Parent = ProfilePanel,
+        })
+        New("UIListLayout", {
+            FillDirection = Enum.FillDirection.Vertical,
+            VerticalAlignment = Enum.VerticalAlignment.Center,
+            Padding = UDim.new(0, 1),
+            Parent = TextsFrame,
+        })
+
+        local UsernameText = WindowInfo.ProfileUsername or (LocalPlayer and LocalPlayer.Name) or "Username"
+        ProfileUsernameLabel = New("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, 16),
+            Text = UsernameText,
+            TextSize = 13,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextTransparency = IsCompact and 1 or 0,
+            Visible = not IsCompact,
+            Parent = TextsFrame,
+        })
+
+        local RoleText = WindowInfo.ProfileRole or "Free"
+        ProfileRoleLabel = New("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, 14),
+            Text = RoleText,
+            TextColor3 = "AccentColor",
+            TextSize = 11,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextTransparency = IsCompact and 1 or 0,
+            Visible = not IsCompact,
+            Parent = TextsFrame,
         })
 
         --// Container \\--
@@ -11783,8 +11902,14 @@ function Library:CreateWindow(WindowInfo)
         DividerLine.Position = UDim2.fromOffset(Width, 0)
         TitleHolder.Size = UDim2.new(0, Width, 1, 0)
         RightWrapper.Size = UDim2.new(1, -Width - 57 - 1, 1, -16)
-        Tabs.Size = UDim2.new(0, Width, 1, -70)
+        Tabs.Size = UDim2.new(0, Width, 1, (WindowInfo.ProfilePanel ~= false) and -119 or -70)
         Container.Size = UDim2.new(1, -Width - 1, 1, -70)
+        if ProfilePanel then
+            ProfilePanel.Size = UDim2.new(0, Width, 0, 48)
+        end
+        if ProfileDivider then
+            ProfileDivider.Size = UDim2.new(0, Width, 0, 1)
+        end
     end
 
     WidthValue.Changed:Connect(function(val)
@@ -11822,10 +11947,22 @@ function Library:CreateWindow(WindowInfo)
                     TweenService:Create(Button.Label, AnimInfo, { TextTransparency = 1 }):Play()
                 end
             end
+            if ProfileUsernameLabel then
+                TweenService:Create(ProfileUsernameLabel, AnimInfo, { TextTransparency = 1 }):Play()
+            end
+            if ProfileRoleLabel then
+                TweenService:Create(ProfileRoleLabel, AnimInfo, { TextTransparency = 1 }):Play()
+            end
 
             task.delay(TweenDuration, function()
                 if IsCompact then
                     WindowTitle.Visible = false
+                    if ProfileUsernameLabel then
+                        ProfileUsernameLabel.Visible = false
+                    end
+                    if ProfileRoleLabel then
+                        ProfileRoleLabel.Visible = false
+                    end
                     for _, Button in Library.TabButtons do
                         if Button.Label then
                             Button.Label.Visible = false
@@ -11852,6 +11989,14 @@ function Library:CreateWindow(WindowInfo)
                     TweenService:Create(Button.Label, AnimInfo, { TextTransparency = TargetTrans }):Play()
                 end
             end
+            if ProfileUsernameLabel then
+                ProfileUsernameLabel.Visible = true
+                TweenService:Create(ProfileUsernameLabel, AnimInfo, { TextTransparency = 0 }):Play()
+            end
+            if ProfileRoleLabel then
+                ProfileRoleLabel.Visible = true
+                TweenService:Create(ProfileRoleLabel, AnimInfo, { TextTransparency = 0 }):Play()
+            end
         end
     end
 
@@ -11874,6 +12019,14 @@ function Library:CreateWindow(WindowInfo)
                 local TargetTrans = (Library.ActiveTab and Library.ActiveTab.TabButton == Button.Button) and 0 or 0.5
                 Button.Label.TextTransparency = IsCompact and 1 or TargetTrans
             end
+        end
+        if ProfileUsernameLabel then
+            ProfileUsernameLabel.Visible = not IsCompact
+            ProfileUsernameLabel.TextTransparency = IsCompact and 1 or 0
+        end
+        if ProfileRoleLabel then
+            ProfileRoleLabel.Visible = not IsCompact
+            ProfileRoleLabel.TextTransparency = IsCompact and 1 or 0
         end
     end
 
@@ -11918,6 +12071,68 @@ function Library:CreateWindow(WindowInfo)
 
     function Window:SetSidebarCompactOnHover(Enabled: boolean)
         WindowInfo.SidebarCompactOnHover = Enabled == true
+    end
+
+    function Window:SetProfileUsername(Username: string)
+        WindowInfo.ProfileUsername = Username
+        if ProfileUsernameLabel then
+            ProfileUsernameLabel.Text = Username
+        end
+    end
+
+    function Window:SetProfileRole(Role: string)
+        WindowInfo.ProfileRole = Role
+        if ProfileRoleLabel then
+            ProfileRoleLabel.Text = Role
+        end
+    end
+
+    function Window:SetProfileImage(Image: string)
+        WindowInfo.ProfileImage = Image
+        if ProfileImage then
+            ProfileImage.Image = Image
+        end
+    end
+
+    function Window:SetProfileUserId(UserId: number)
+        WindowInfo.ProfileUserId = UserId
+        if ProfileImage then
+            ProfileImage.Image = string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150", UserId)
+            task.spawn(function()
+                local success, content = pcall(function()
+                    return Players:GetUserThumbnailAsync(
+                        UserId,
+                        Enum.ThumbnailType.HeadShot,
+                        Enum.ThumbnailSize.Size150x150
+                    )
+                end)
+                if success and content and ProfileImage and ProfileImage.Parent then
+                    ProfileImage.Image = content
+                end
+            end)
+        end
+    end
+
+    function Window:SetProfileVisible(Visible: boolean)
+        local IsVisible = Visible == true
+        WindowInfo.ProfilePanel = IsVisible
+        if ProfilePanel then
+            ProfilePanel.Visible = IsVisible
+        end
+        if ProfileDivider then
+            ProfileDivider.Visible = IsVisible
+        end
+        if IsVisible then
+            if ProfileUsernameLabel then
+                ProfileUsernameLabel.Visible = not IsCompact
+                ProfileUsernameLabel.TextTransparency = IsCompact and 1 or 0
+            end
+            if ProfileRoleLabel then
+                ProfileRoleLabel.Visible = not IsCompact
+                ProfileRoleLabel.TextTransparency = IsCompact and 1 or 0
+            end
+        end
+        Tabs.Size = UDim2.new(0, Window:GetSidebarWidth(), 1, IsVisible and -119 or -70)
     end
 
     local SidebarHovered = false
@@ -11979,6 +12194,15 @@ function Library:CreateWindow(WindowInfo)
     TitleHolder.MouseLeave:Connect(function()
         OnSidebarHoverChanged(false)
     end)
+
+    if ProfilePanel then
+        ProfilePanel.MouseEnter:Connect(function()
+            OnSidebarHoverChanged(true)
+        end)
+        ProfilePanel.MouseLeave:Connect(function()
+            OnSidebarHoverChanged(false)
+        end)
+    end
 
     function Window:ShowTabInfo(Name, Description)
         CurrentTabLabel.Text = Name
@@ -14265,22 +14489,56 @@ function Library:CreateWindow(WindowInfo)
     local TextProperties = { "BackgroundTransparency", "TextTransparency" }
     local StrokeProperties = { "Transparency" }
 
-    local function FadeInstance(Desc, Properties)
-        local Cache = TransparencyCache[Desc]
-        if not Cache then
-            Cache = {}
-            TransparencyCache[Desc] = Cache
+    local function GetInstanceProperties(Desc: Instance)
+        local ClassName = Desc.ClassName
+        if ClassName == "ImageLabel" or ClassName == "ImageButton" then
+            return ImageProperties
+        elseif ClassName == "TextLabel" or ClassName == "TextBox" or ClassName == "TextButton" then
+            return TextProperties
+        elseif ClassName == "UIStroke" then
+            return StrokeProperties
+        elseif Desc:IsA("GuiObject") then
+            return GuiProperties
         end
+        return nil
+    end
 
-        for _, Prop in Properties do
-            if not Library.Toggled then
-                Cache[Prop] = Desc[Prop]
+    local function CacheDescendant(Desc: Instance)
+        if not TransparencyCache[Desc] then
+            local Props = GetInstanceProperties(Desc)
+            if Props then
+                local Cache = {}
+                for _, Prop in Props do
+                    Cache[Prop] = (Desc :: any)[Prop]
+                end
+                TransparencyCache[Desc] = Cache
             end
+        end
+    end
 
-            if Cache[Prop] ~= nil and Cache[Prop] ~= 1 then
-                TweenService:Create(Desc, Library.WindowAnimationInfo, {
-                    [Prop] = Library.Toggled and Cache[Prop] or 1,
-                }):Play()
+    local function CacheAllDescendants()
+        if not TransparencyCache[MainFrame] then
+            TransparencyCache[MainFrame] = {
+                BackgroundTransparency = WindowInfo.BackgroundTransparency or 0.3,
+            }
+        end
+        for _, Desc in MainFrame:GetDescendants() do
+            CacheDescendant(Desc)
+        end
+    end
+
+    local function RefreshOpenCache()
+        for _, Desc in MainFrame:GetDescendants() do
+            local Props = GetInstanceProperties(Desc)
+            if Props then
+                local Cache = TransparencyCache[Desc]
+                if not Cache then
+                    Cache = {}
+                    TransparencyCache[Desc] = Cache
+                end
+                for _, Prop in Props do
+                    Cache[Prop] = (Desc :: any)[Prop]
+                end
             end
         end
     end
@@ -14306,44 +14564,125 @@ function Library:CreateWindow(WindowInfo)
             Library.Toggled = not Library.Toggled
         end
 
-        if Library.Animations and Library.Animations.ToggleWindow == true then
-            local FadeTime = Library.WindowAnimationInfo.Time
+        local Anims = WindowInfo.Animations or Library.Animations
+        local ShouldAnimate = Anims and Anims.ToggleWindow ~= false
+
+        if ShouldAnimate then
+            local AnimInfo = Library.WindowAnimationInfo or TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+            local AnimTime = AnimInfo.Time or 0.25
+            local BaseScale = 1
+            if MainScale then
+                BaseScale = Library.DPIScale - (tonumber(Library.ScalesOffset[MainScale]) or 0)
+            end
+            local FrameW = if MainFrame.AbsoluteSize.X > 0 then MainFrame.AbsoluteSize.X else (WindowInfo.Size.X.Offset > 0 and WindowInfo.Size.X.Offset or 720)
+            local FrameH = if MainFrame.AbsoluteSize.Y > 0 then MainFrame.AbsoluteSize.Y else (WindowInfo.Size.Y.Offset > 0 and WindowInfo.Size.Y.Offset or 600)
+
             Fading = true
 
             if Library.Toggled then
+                CacheAllDescendants()
+
+                local TargetPos = MainFrame.Position
+                local ScaleFactor = 0.90
+                local OffsetX = FrameW * (1 - ScaleFactor) / 2
+                local OffsetY = FrameH * (1 - ScaleFactor) / 2
+                local StartPos = UDim2.new(TargetPos.X.Scale, TargetPos.X.Offset + OffsetX, TargetPos.Y.Scale, TargetPos.Y.Offset + OffsetY)
+
+                if MainScale then
+                    MainScale.Scale = BaseScale * ScaleFactor
+                end
+                MainFrame.Position = StartPos
+                MainFrame.BackgroundTransparency = 1
                 MainFrame.Visible = true
-            end
 
-            if Library.Toggled then
-                FadeInstance(MainFrame, { "BackgroundTransparency" })
-                task.wait(FadeTime / 2)
-            else
-                task.delay(FadeTime / 2, FadeInstance, MainFrame, { "BackgroundTransparency" })
-            end
-
-            for _, Instance in MainFrame:GetDescendants() do
-                if Instance == TopBar then
-                    continue
-                end
-
-                if Instance:IsA("GuiObject") then
-                    local ClassName = Instance.ClassName
-                    if ClassName == "ImageLabel" or ClassName == "ImageButton" then
-                        FadeInstance(Instance, ImageProperties)
-                    elseif ClassName == "TextLabel" or ClassName == "TextBox" or ClassName == "TextButton" then
-                        FadeInstance(Instance, TextProperties)
-                    else
-                        FadeInstance(Instance, GuiProperties)
+                for Desc, Cache in TransparencyCache do
+                    if Desc and Desc.Parent and Desc:IsDescendantOf(MainFrame) then
+                        for Prop, _ in Cache do
+                            pcall(function()
+                                (Desc :: any)[Prop] = 1
+                            end)
+                        end
                     end
-                elseif Instance.ClassName == "UIStroke" then
-                    FadeInstance(Instance, StrokeProperties)
                 end
-            end
 
-            task.delay(FadeTime, function()
-                MainFrame.Visible = Library.Toggled
-                Fading = false
-            end)
+                if MainScale then
+                    TweenService:Create(MainScale, AnimInfo, { Scale = BaseScale }):Play()
+                end
+                TweenService:Create(MainFrame, AnimInfo, {
+                    Position = TargetPos,
+                    BackgroundTransparency = WindowInfo.BackgroundTransparency or 0.3,
+                }):Play()
+
+                for Desc, Cache in TransparencyCache do
+                    if Desc and Desc.Parent and Desc:IsDescendantOf(MainFrame) then
+                        local TargetProps = {}
+                        local HasProps = false
+                        for Prop, Val in Cache do
+                            if Val ~= 1 then
+                                TargetProps[Prop] = Val
+                                HasProps = true
+                            end
+                        end
+                        if HasProps then
+                            pcall(function()
+                                TweenService:Create(Desc, AnimInfo, TargetProps):Play()
+                            end)
+                        end
+                    end
+                end
+
+                task.delay(AnimTime, function()
+                    if MainScale then
+                        MainScale.Scale = BaseScale
+                    end
+                    MainFrame.Position = TargetPos
+                    MainFrame.BackgroundTransparency = WindowInfo.BackgroundTransparency or 0.3
+                    Fading = false
+                end)
+            else
+                RefreshOpenCache()
+
+                local CurrentPos = MainFrame.Position
+                local ScaleFactor = 0.90
+                local OffsetX = FrameW * (1 - ScaleFactor) / 2
+                local OffsetY = FrameH * (1 - ScaleFactor) / 2
+                local EndPos = UDim2.new(CurrentPos.X.Scale, CurrentPos.X.Offset + OffsetX, CurrentPos.Y.Scale, CurrentPos.Y.Offset + OffsetY)
+
+                if MainScale then
+                    TweenService:Create(MainScale, AnimInfo, { Scale = BaseScale * ScaleFactor }):Play()
+                end
+                TweenService:Create(MainFrame, AnimInfo, {
+                    Position = EndPos,
+                    BackgroundTransparency = 1,
+                }):Play()
+
+                for Desc, Cache in TransparencyCache do
+                    if Desc and Desc.Parent and Desc:IsDescendantOf(MainFrame) then
+                        local TargetProps = {}
+                        local HasProps = false
+                        for Prop, Val in Cache do
+                            if Val ~= 1 then
+                                TargetProps[Prop] = 1
+                                HasProps = true
+                            end
+                        end
+                        if HasProps then
+                            pcall(function()
+                                TweenService:Create(Desc, AnimInfo, TargetProps):Play()
+                            end)
+                        end
+                    end
+                end
+
+                task.delay(AnimTime, function()
+                    MainFrame.Visible = false
+                    if MainScale then
+                        MainScale.Scale = BaseScale
+                    end
+                    MainFrame.Position = CurrentPos
+                    Fading = false
+                end)
+            end
         else
             MainFrame.Visible = Library.Toggled
         end

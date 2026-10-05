@@ -22,6 +22,8 @@ local Window = Library:CreateWindow({
 	-- Set AlwaysOnTop to true if you want the menu to render above Roblox core blur (executor only)
 	-- BackgroundTransparency = Background transparency of the window (Default value = 0.3)
 	-- SidebarCompactOnHover = Expands sidebar on hover, compacts when mouse leaves (Default value = true)
+	-- ProfilePanel = Shows local player circular avatar, username, and role at bottom of sidebar (Default value = true)
+	-- ProfileRole = Role displayed under username in profile panel (Default value = "Free")
 	-- NotifySide = Changes the side of the notifications (Left, Right) (Default value = Left)
 	-- Position and Size are also valid options here
 	-- but you do not need to define them unless you are changing them :)
@@ -804,6 +806,20 @@ MenuGroup:AddToggle("FooterGradientToggle", {
 	Default = true,
 	Callback = function(Value)
 		Window:SetFooterGradient(Value)
+	end,
+})
+MenuGroup:AddToggle("ToggleWindowAnimation", {
+	Text = "Window Scale/Fade Animation",
+	Default = true,
+	Callback = function(Value)
+		Library.Animations.ToggleWindow = Value
+	end,
+})
+MenuGroup:AddToggle("ProfilePanelToggle", {
+	Text = "Sidebar Profile Panel",
+	Default = true,
+	Callback = function(Value)
+		Window:SetProfileVisible(Value)
 	end,
 })
 
