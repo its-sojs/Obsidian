@@ -21,6 +21,8 @@ local Window = Library:CreateWindow({
 	-- Set ShowCustomCursor to false if you don't want to use the Linoria cursor
 	-- Set AlwaysOnTop to true if you want the menu to render above Roblox core blur (executor only)
 	-- BackgroundTransparency = Background transparency of the window (Default value = 0.3)
+	-- Blur = Blur background when opening, unblur when closing (Default value = true)
+	-- BlurSize = Amount of blur applied to the background (Default value = 20)
 	-- SidebarCompactOnHover = Expands sidebar on hover, compacts when mouse leaves (Default value = true)
 	-- ProfilePanel = Shows local player circular avatar, username, and role at bottom of sidebar (Default value = true)
 	-- ProfileRole = Role displayed under username in profile panel (Default value = "Free")
@@ -820,6 +822,13 @@ MenuGroup:AddToggle("ProfilePanelToggle", {
 	Default = true,
 	Callback = function(Value)
 		Window:SetProfileVisible(Value)
+	end,
+})
+MenuGroup:AddToggle("BlurBackgroundToggle", {
+	Text = "Blur Background",
+	Default = true,
+	Callback = function(Value)
+		Window:SetBlur(Value)
 	end,
 })
 

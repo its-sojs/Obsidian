@@ -10,6 +10,7 @@ local UserInputService: UserInputService = cloneref(game:GetService("UserInputSe
 local TextService: TextService = cloneref(game:GetService("TextService"))
 local Teams: Teams = cloneref(game:GetService("Teams"))
 local TweenService: TweenService = cloneref(game:GetService("TweenService"))
+local Lighting: Lighting = cloneref(game:GetService("Lighting"))
 
 local getgenv = getgenv or function()
     return shared
@@ -207,6 +208,9 @@ local Library = {
 
     --// Loading Window \\--
     ActiveLoading = nil,
+
+    --// Blur \\--
+    BlurEffect = nil,
 
     --// Context Menu \\--
     ContextMenus = {}, 
@@ -429,6 +433,8 @@ local Templates = {
         --// Background \\--
         BackgroundImage = "",
         BackgroundTransparency = 0.3,
+        Blur = true,
+        BlurSize = 20,
 
         --// Animations \\--
         Animations = {
@@ -11061,6 +11067,107 @@ function Library:CreateWindow(WindowInfo)
     local LastExpandedWidth = ExpandedLeftWidth
     local InitialLeftWidth = IsCompact and WindowInfo.SidebarCompactWidth or ExpandedLeftWidth
 
+    local BlurEffect = nil
+    local BlurTween = nil
+
+    local function GetOrCreateBlur()
+        if BlurEffect and BlurEffect.Parent then
+            return BlurEffect
+        end
+
+        local Existing = nil
+        pcall(function()
+            Existing = Lighting:FindFirstChild("ObsidianBlur")
+        end)
+        if Existing and Existing:IsA("BlurEffect") then
+            BlurEffect = Existing
+            Library.BlurEffect = Existing
+            return BlurEffect
+        end
+
+        local success, newBlur = pcall(function()
+            local b = Instance.new("BlurEffect")
+            b.Name = "ObsidianBlur"
+            b.Size = 0
+            b.Enabled = false
+            b.Parent = Lighting or workspace.CurrentCamera
+            return b
+        end)
+        if success and newBlur then
+            BlurEffect = newBlur
+            Library.BlurEffect = newBlur
+        end
+        return BlurEffect
+    end
+
+    local function ApplyBlur(Opening: boolean, Animated: boolean, Duration: number?)
+        if not WindowInfo.Blur then
+            if BlurEffect and BlurEffect.Enabled then
+                if BlurTween then
+                    BlurTween:Cancel()
+                    BlurTween = nil
+                end
+                if Animated and Duration and Duration > 0 then
+                    local AnimInfo = TweenInfo.new(Duration, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+                    BlurTween = TweenService:Create(BlurEffect, AnimInfo, { Size = 0 })
+                    BlurTween:Play()
+                    task.delay(Duration, function()
+                        if not WindowInfo.Blur or not Library.Toggled then
+                            BlurEffect.Enabled = false
+                            BlurEffect.Size = 0
+                        end
+                    end)
+                else
+                    BlurEffect.Size = 0
+                    BlurEffect.Enabled = false
+                end
+            end
+            return
+        end
+
+        local Blur = GetOrCreateBlur()
+        if not Blur then
+            return
+        end
+
+        if BlurTween then
+            BlurTween:Cancel()
+            BlurTween = nil
+        end
+
+        local TargetSize = WindowInfo.BlurSize or 20
+
+        if Opening then
+            Blur.Enabled = true
+            if Animated and Duration and Duration > 0 then
+                local AnimInfo = TweenInfo.new(Duration, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+                BlurTween = TweenService:Create(Blur, AnimInfo, { Size = TargetSize })
+                BlurTween:Play()
+            else
+                Blur.Size = TargetSize
+            end
+        else
+            if Animated and Duration and Duration > 0 then
+                local AnimInfo = TweenInfo.new(Duration, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+                BlurTween = TweenService:Create(Blur, AnimInfo, { Size = 0 })
+                BlurTween:Play()
+                task.delay(Duration, function()
+                    if not Library.Toggled and Blur and Blur.Parent then
+                        Blur.Size = 0
+                        Blur.Enabled = false
+                    end
+                end)
+            else
+                Blur.Size = 0
+                Blur.Enabled = false
+            end
+        end
+    end
+
+    if WindowInfo.Blur then
+        GetOrCreateBlur()
+    end
+
     do
         Library.KeybindFrame, Library.KeybindContainer = Library:AddDraggableMenu("Keybinds")
         Library.KeybindFrame.AnchorPoint = Vector2.new(0, 0.5)
@@ -12133,6 +12240,27 @@ function Library:CreateWindow(WindowInfo)
             end
         end
         Tabs.Size = UDim2.new(0, Window:GetSidebarWidth(), 1, IsVisible and -119 or -70)
+    end
+
+    function Window:SetBlur(Enabled: boolean)
+        WindowInfo.Blur = Enabled == true
+        if Library.Toggled then
+            ApplyBlur(WindowInfo.Blur, true, 0.25)
+        else
+            ApplyBlur(false, false)
+        end
+    end
+
+    function Window:SetBlurSize(Size: number)
+        assert(typeof(Size) == "number", "Expected number for Size got: " .. typeof(Size))
+        WindowInfo.BlurSize = Size
+        if Library.Toggled and WindowInfo.Blur then
+            ApplyBlur(true, true, 0.25)
+        end
+    end
+
+    function Window:IsBlurEnabled()
+        return WindowInfo.Blur == true
     end
 
     local SidebarHovered = false
@@ -14580,6 +14708,7 @@ function Library:CreateWindow(WindowInfo)
             Fading = true
 
             if Library.Toggled then
+                ApplyBlur(true, true, AnimTime)
                 CacheAllDescendants()
 
                 local TargetPos = MainFrame.Position
@@ -14640,6 +14769,7 @@ function Library:CreateWindow(WindowInfo)
                     Fading = false
                 end)
             else
+                ApplyBlur(false, true, AnimTime)
                 RefreshOpenCache()
 
                 local CurrentPos = MainFrame.Position
@@ -14685,6 +14815,7 @@ function Library:CreateWindow(WindowInfo)
             end
         else
             MainFrame.Visible = Library.Toggled
+            ApplyBlur(Library.Toggled, false)
         end
 
         if WindowInfo.UnlockMouseWhileOpen then
@@ -15672,6 +15803,20 @@ function Library:Unload()
         ScreenGui:Destroy()
     end
 
+    if Library.BlurEffect then
+        pcall(function()
+            Library.BlurEffect:Destroy()
+        end)
+        Library.BlurEffect = nil
+    end
+
+    pcall(function()
+        local Existing = Lighting:FindFirstChild("ObsidianBlur")
+        if Existing then
+            Existing:Destroy()
+        end
+    end)
+
     --// Clear tables
     table.clear(Library.Registry)
 
@@ -15707,6 +15852,7 @@ function Library:Unload()
     Library.WindowContainer = nil
     Library.KeybindFrame = nil
     Library.KeybindContainer = nil
+    Library.BlurEffect = nil
 
     getgenv().Library = nil
 end
