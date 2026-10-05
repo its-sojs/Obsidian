@@ -3,15 +3,9 @@
 -- You can suggest changes with a pull request or something
 
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
-local function LoadModule(path)
-	if isfile and isfile(path) then
-		return loadstring(readfile(path))()
-	end
-	return loadstring(game:HttpGet(repo .. path))()
-end
-local Library = LoadModule("Library.lua")
-local ThemeManager = LoadModule("addons/ThemeManager.lua")
-local SaveManager = LoadModule("addons/SaveManager.lua")
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 
 local Options = Library.Options
 local Toggles = Library.Toggles
