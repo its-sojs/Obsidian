@@ -11840,6 +11840,10 @@ function Library:CreateWindow(WindowInfo)
         MainFrame.BackgroundTransparency = Transparency
     end
 
+    function Window:SetSidebarCompactOnHover(Enabled: boolean)
+        WindowInfo.SidebarCompactOnHover = Enabled == true
+    end
+
     local SidebarHovered = false
     local HoverCheckThread = nil
 

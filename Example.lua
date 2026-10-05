@@ -3,9 +3,15 @@
 -- You can suggest changes with a pull request or something
 
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
-local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
-local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
-local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+local function LoadModule(path)
+	if isfile and isfile(path) then
+		return loadstring(readfile(path))()
+	end
+	return loadstring(game:HttpGet(repo .. path))()
+end
+local Library = LoadModule("Library.lua")
+local ThemeManager = LoadModule("addons/ThemeManager.lua")
+local SaveManager = LoadModule("addons/SaveManager.lua")
 
 local Options = Library.Options
 local Toggles = Library.Toggles
@@ -20,6 +26,8 @@ local Window = Library:CreateWindow({
 	-- Set MobileButtonsSide to "Left" or "Right" if you want the ui toggle & lock buttons to be on the left or right side of the window
 	-- Set ShowCustomCursor to false if you don't want to use the Linoria cursor
 	-- Set AlwaysOnTop to true if you want the menu to render above Roblox core blur (executor only)
+	-- BackgroundTransparency = Background transparency of the window (Default value = 0.6)
+	-- SidebarCompactOnHover = Expands sidebar on hover, compacts when mouse leaves (Default value = true)
 	-- NotifySide = Changes the side of the notifications (Left, Right) (Default value = Left)
 	-- Position and Size are also valid options here
 	-- but you do not need to define them unless you are changing them :)
@@ -780,6 +788,23 @@ MenuGroup:AddSlider("UICornerSlider", {
 		Window:SetCornerRadius(value)
 	end
 })
+MenuGroup:AddSlider("BackgroundTransparencySlider", {
+	Text = "Background Transparency",
+	Default = 0.6,
+	Min = 0,
+	Max = 1,
+	Rounding = 2,
+	Callback = function(value)
+		Window:SetBackgroundTransparency(value)
+	end
+})
+MenuGroup:AddToggle("SidebarCompactOnHover", {
+	Text = "Sidebar Compact on Hover",
+	Default = true,
+	Callback = function(Value)
+		Window:SetSidebarCompactOnHover(Value)
+	end,
+})
 
 MenuGroup:AddDivider()
 MenuGroup:AddLabel("Menu bind")
@@ -820,7 +845,7 @@ SaveManager:SetSubFolder("specific-place") -- if the game has multiple places in
 -- Builds our config menu on the right side of our tab
 SaveManager:BuildConfigSection(Tabs["UI Settings"])
 
--- Builds our theme menu (with plenty of built in themes) on the left side
+-- Builds our theme menu on the left side
 -- NOTE: you can also call ThemeManager:ApplyToGroupbox to add it to a specific groupbox
 ThemeManager:ApplyToTab(Tabs["UI Settings"])
 
