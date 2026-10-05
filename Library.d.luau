@@ -963,6 +963,7 @@ export type Window = {
     ChangeTitle: (self: Window, Title: string) -> (),
     SetBackgroundImage: (self: Window, Image: string) -> (),
     SetFooter: (self: Window, Footer: string) -> (),
+    SetFooterGradient: (self: Window, Enabled: boolean) -> (),
     SetBackgroundTransparency: (self: Window, Transparency: number) -> (),
     SetSidebarCompactOnHover: (self: Window, Enabled: boolean) -> (),
     SetAlwaysOnTop: (self: Window, Enabled: boolean) -> (),
@@ -1189,6 +1190,9 @@ export type Library = {
         WindowInfo: {
             Title: string?,
             Footer: string?,
+            FooterGradient: boolean?,
+            FooterGradientSpeed: number?,
+            FooterTransparency: number?,
             Position: UDim2?,
             Size: UDim2?,
             Icon: string?,

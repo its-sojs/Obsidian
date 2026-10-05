@@ -372,7 +372,9 @@ local Templates = {
     --// Library \\--
     Window = {
         Title = "No Title",
-        Footer = "No Footer",
+        Footer = "https://dsc.gg/getorigin",
+        FooterGradient = true,
+        FooterGradientSpeed = 0.15,
 
         Position = UDim2.fromOffset(6, 6),
         Size = UDim2.fromOffset(720, 600),
@@ -421,7 +423,7 @@ local Templates = {
 
         --// Background \\--
         BackgroundImage = "",
-        BackgroundTransparency = 0.6,
+        BackgroundTransparency = 0.3,
 
         --// Animations \\--
         Animations = {
@@ -11034,6 +11036,7 @@ function Library:CreateWindow(WindowInfo)
     local BottomBackground
     local BottomBackgroundCorner
     local FooterLabel
+    local FooterGradient
     local TopBar
     local WindowSnapConfig = {
         Enabled = WindowInfo.Snapping,
@@ -11386,11 +11389,77 @@ function Library:CreateWindow(WindowInfo)
         FooterLabel = New("TextLabel", {
             BackgroundTransparency = 1,
             Size = UDim2.fromScale(1, 1),
-            Text = WindowInfo.Footer,
+            Text = WindowInfo.Footer or "https://dsc.gg/getorigin",
+            TextColor3 = Color3.fromRGB(255, 255, 255),
             TextSize = 14,
-            TextTransparency = 0.5,
+            TextTransparency = WindowInfo.FooterTransparency or 0,
             Parent = BottomBar,
         })
+
+        if WindowInfo.FooterGradient ~= false then
+            FooterGradient = New("UIGradient", {
+                Name = "HolographicGradient",
+                Parent = FooterLabel,
+            })
+
+            local HoloPalette = {
+                Color3.fromRGB(115, 235, 255), -- Aqua / Cyan
+                Color3.fromRGB(160, 160, 255), -- Periwinkle
+                Color3.fromRGB(210, 150, 255), -- Lavender
+                Color3.fromRGB(255, 140, 225), -- Holo Pink
+                Color3.fromRGB(255, 210, 150), -- Peach / Gold
+                Color3.fromRGB(140, 255, 215), -- Mint / Seafoam
+            }
+            local PaletteSize = #HoloPalette
+
+            local function GetHoloColor(phase: number): Color3
+                phase = phase % 1
+                if phase < 0 then
+                    phase = phase + 1
+                end
+                local scaled = phase * PaletteSize
+                local index1 = math.floor(scaled)
+                local alpha = scaled - index1
+                local c1 = HoloPalette[index1 + 1]
+                local c2 = HoloPalette[((index1 + 1) % PaletteSize) + 1]
+                return c1:Lerp(c2, alpha)
+            end
+
+            local function UpdateFooterGradient(phase: number)
+                if not FooterGradient or not FooterGradient.Parent then
+                    return
+                end
+                FooterGradient.Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0.0, GetHoloColor(phase)),
+                    ColorSequenceKeypoint.new(0.2, GetHoloColor(phase + 0.2)),
+                    ColorSequenceKeypoint.new(0.4, GetHoloColor(phase + 0.4)),
+                    ColorSequenceKeypoint.new(0.6, GetHoloColor(phase + 0.6)),
+                    ColorSequenceKeypoint.new(0.8, GetHoloColor(phase + 0.8)),
+                    ColorSequenceKeypoint.new(1.0, GetHoloColor(phase + 1.0)),
+                })
+            end
+
+            local AnimSpeed = WindowInfo.FooterGradientSpeed or 0.15
+            UpdateFooterGradient(os.clock() * AnimSpeed)
+
+            Library:GiveSignal(RunService.RenderStepped:Connect(function()
+                if not Library.Toggled or not (ScreenGui and ScreenGui.Parent) then
+                    return
+                end
+                UpdateFooterGradient(os.clock() * AnimSpeed)
+            end))
+        end
+
+        FooterLabel.InputBegan:Connect(function(Input: InputObject)
+            if IsClickInput(Input) then
+                if setclipboard then
+                    setclipboard(FooterLabel.Text)
+                    if Library.Notify then
+                        Library:Notify("Copied footer link to clipboard!", 2)
+                    end
+                end
+            end
+        end)
 
         --// Resize Button \\--
         if WindowInfo.Resizable then
@@ -11554,6 +11623,13 @@ function Library:CreateWindow(WindowInfo)
 
         FooterLabel.Text = Footer
         WindowInfo.Footer = Footer
+    end
+
+    function Window:SetFooterGradient(Enabled: boolean)
+        WindowInfo.FooterGradient = Enabled == true
+        if FooterGradient then
+            FooterGradient.Enabled = Enabled == true
+        end
     end
 
     function Window:SetAlwaysOnTop(Enabled: boolean)
@@ -13137,9 +13213,6 @@ function Library:CreateWindow(WindowInfo)
 
             Tab.TabButton = TabButton
 
-            TweenService:Create(TabButton, Library.TweenInfo, {
-                BackgroundTransparency = 0,
-            }):Play()
             if TabIndicator then
                 TweenService:Create(TabIndicator, Library.TweenInfo, {
                     BackgroundTransparency = 0,
@@ -13173,10 +13246,6 @@ function Library:CreateWindow(WindowInfo)
         end
 
         function Tab:Hide()
-            TweenService:Create(TabButton, Library.TweenInfo, {
-                BackgroundTransparency = 1,
-            }):Play()
-
             if TabIndicator then
                 TweenService:Create(TabIndicator, Library.TweenInfo, {
                     BackgroundTransparency = 1,
@@ -13603,10 +13672,6 @@ function Library:CreateWindow(WindowInfo)
 
             Tab.TabButton = TabButton
 
-            TweenService:Create(TabButton, Library.TweenInfo, {
-                BackgroundTransparency = 0,
-            }):Play()
-
             if TabIndicator then
                 TweenService:Create(TabIndicator, Library.TweenInfo, {
                     BackgroundTransparency = 0,
@@ -13643,10 +13708,6 @@ function Library:CreateWindow(WindowInfo)
         end
 
         function Tab:Hide()
-            TweenService:Create(TabButton, Library.TweenInfo, {
-                BackgroundTransparency = 1,
-            }):Play()
-
             if TabIndicator then
                 TweenService:Create(TabIndicator, Library.TweenInfo, {
                     BackgroundTransparency = 1,

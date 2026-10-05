@@ -20,14 +20,14 @@ local Window = Library:CreateWindow({
 	-- Set MobileButtonsSide to "Left" or "Right" if you want the ui toggle & lock buttons to be on the left or right side of the window
 	-- Set ShowCustomCursor to false if you don't want to use the Linoria cursor
 	-- Set AlwaysOnTop to true if you want the menu to render above Roblox core blur (executor only)
-	-- BackgroundTransparency = Background transparency of the window (Default value = 0.6)
+	-- BackgroundTransparency = Background transparency of the window (Default value = 0.3)
 	-- SidebarCompactOnHover = Expands sidebar on hover, compacts when mouse leaves (Default value = true)
 	-- NotifySide = Changes the side of the notifications (Left, Right) (Default value = Left)
 	-- Position and Size are also valid options here
 	-- but you do not need to define them unless you are changing them :)
 
 	Title = "mspaint",
-	Footer = "version: example",
+	Footer = "https://dsc.gg/getorigin",
 	Icon = 95816097006870,
 	NotifySide = "Right",
 	ShowCustomCursor = true,
@@ -784,7 +784,7 @@ MenuGroup:AddSlider("UICornerSlider", {
 })
 MenuGroup:AddSlider("BackgroundTransparencySlider", {
 	Text = "Background Transparency",
-	Default = 0.6,
+	Default = 0.3,
 	Min = 0,
 	Max = 1,
 	Rounding = 2,
@@ -797,6 +797,13 @@ MenuGroup:AddToggle("SidebarCompactOnHover", {
 	Default = true,
 	Callback = function(Value)
 		Window:SetSidebarCompactOnHover(Value)
+	end,
+})
+MenuGroup:AddToggle("FooterGradientToggle", {
+	Text = "Footer Holographic Gradient",
+	Default = true,
+	Callback = function(Value)
+		Window:SetFooterGradient(Value)
 	end,
 })
 
