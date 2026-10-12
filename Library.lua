@@ -195,12 +195,14 @@ local Library = {
     --// Keybinds Frame \\--
     KeybindFrame = nil,
     KeybindContainer = nil,
+    KeybindPanel = nil,
     KeybindToggles = {},
 
     --// Notifications \\--
     Notifications = {},
     NotifySide = "Right",
     NotifyTweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    NotifyAnimation = "Tween",
 
     --// Dialogues \\--
     Dialogues = {},
@@ -232,6 +234,9 @@ local Library = {
 
     GroupboxTweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     RotatingChevronTweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+
+    DropdownAnimation = "Grow",
+    DropdownTransparency = 0,
 
     Animations = {
         ToggleWindow = true,
@@ -423,6 +428,7 @@ local Templates = {
         DisableCompactingSnap = false,
         SidebarCompacted = true,
         SidebarCompactOnHover = true,
+        SidebarPosition = "Left",
         ProfilePanel = true,
         ProfileUsername = nil,
         ProfileRole = "Free",
@@ -441,8 +447,13 @@ local Templates = {
         --// Background \\--
         BackgroundImage = "",
         BackgroundTransparency = 0.3,
-        Blur = true,
+        BackgroundType = "Default",
+        BackgroundBlurMode = "Default",
+        Blur = false,
         BlurSize = 20,
+
+        --// Window Scale (multiplier on top of DPI) \\--
+        Scale = 1,
 
         --// Element Transparency \\--
         GroupboxTransparency = 0,
@@ -461,6 +472,14 @@ local Templates = {
         TabTransitionTime = 0.22,
         TabSwipeOffset = 26,
         TabSwipeFrom = "bottom",
+
+        --// Window open/close animation \\--
+        WindowAnimation = "Default",
+        WindowAnimationTime = 0.25,
+        WindowEasingStyle = "Quart",
+        WindowEasingDirection = "Out",
+        WindowTweenPosition = "Center",
+        WindowTweenOffset = 40,
         TabButtonsStyle = {
             Gap = 0,
             Padding = 0,
@@ -574,6 +593,9 @@ local Templates = {
         DragSelect = false,
         MaxVisibleDropdownItems = 8,
         KeepDisabledValuePosition = false,
+
+        Animation = "Default",
+        MenuTransparency = 0,
 
         Callback = function() end,
         Changed = function() end,
@@ -1504,6 +1526,19 @@ function Library:SetDPIScale(DPIScale: number)
         UIScale.Scale = Library.DPIScale - (tonumber(Library.ScalesOffset[UIScale]) or 0)
     end
 
+    --// Re-apply window Scale multiplier on top of DPI \\--
+    do
+        local Win = Library.Window
+        if Win and Win._MainScale and Win._MainScale.Parent and typeof(Win.GetScale) == "function" then
+            local ScaleFactor = Win:GetScale() or 1
+            if ScaleFactor ~= 1 then
+                pcall(function()
+                    Win._MainScale.Scale = (Library.DPIScale - (tonumber(Library.ScalesOffset[Win._MainScale]) or 0)) * ScaleFactor
+                end)
+            end
+        end
+    end
+
     for _, Option in Options do
         if Option.Type == "Dropdown" then
             Option:RecalculateListSize()
@@ -1655,12 +1690,21 @@ local function FillInstance(Table: { [string]: any }, Instance: GuiObject)
 end
 
 local function New(ClassName: string, Properties: { [string]: any }): any
+    --// Every UIStroke follows the global outline transparency unless explicitly overridden \\--
+    if ClassName == "UIStroke" and Properties["Transparency"] == nil and (Library.OutlineTransparency or 0) ~= 0 then
+        Properties["Transparency"] = Library.OutlineTransparency
+    end
+
     local Instance = Instance.new(ClassName)
 
     if Templates[ClassName] then
         FillInstance(Templates[ClassName], Instance)
     end
     FillInstance(Properties, Instance)
+
+    if ClassName == "UIStroke" then
+        table.insert(Library.Outlines, Instance)
+    end
 
     if Properties["Parent"] and not Properties["ZIndex"] then
         pcall(function()
@@ -2579,19 +2623,15 @@ function Library:AddOutline(Frame: GuiObject)
     local OutlineStroke = New("UIStroke", {
         Color = "OutlineColor",
         Thickness = 1,
-        Transparency = Library.OutlineTransparency or 0,
         ZIndex = 2,
         Parent = Frame,
     })
     local ShadowStroke = New("UIStroke", {
         Color = "DarkColor",
         Thickness = 1.5,
-        Transparency = Library.OutlineTransparency or 0,
         ZIndex = 1,
         Parent = Frame,
     })
-    table.insert(Library.Outlines, OutlineStroke)
-    table.insert(Library.Outlines, ShadowStroke)
     return OutlineStroke, ShadowStroke
 end
 
@@ -2710,15 +2750,18 @@ function Library:SetOutlineTransparency(Transparency: number)
     assert(typeof(Transparency) == "number", "Expected number for Transparency got: " .. typeof(Transparency))
     Transparency = math.clamp(Transparency, 0, 1)
     Library.OutlineTransparency = Transparency
-    for _, Stroke in Library.Outlines do
-        if Stroke and Stroke.Parent then
-            pcall(function()
-                Stroke.Transparency = Transparency
-            end)
-            local Cache = TransparencyCache[Stroke]
-            if Cache then
-                Cache.Transparency = Transparency
-            end
+    for Index = #Library.Outlines, 1, -1 do
+        local Stroke = Library.Outlines[Index]
+        if typeof(Stroke) ~= "Instance" or Stroke.Parent == nil then
+            table.remove(Library.Outlines, Index)
+            continue
+        end
+        pcall(function()
+            Stroke.Transparency = Transparency
+        end)
+        local Cache = TransparencyCache[Stroke]
+        if Cache then
+            Cache.Transparency = Transparency
         end
     end
 end
@@ -2774,6 +2817,44 @@ function Library:SetSearchbarTransparency(Transparency: number)
     Library.SearchbarTransparency = Transparency
     if Library.Window and Library.Window.SetSearchbarTransparency then
         Library.Window:SetSearchbarTransparency(Transparency)
+    end
+end
+
+function Library:SetDropdownAnimation(Animation: string)
+    local Map = { grow = "Grow", fade = "Fade", ["fade/grow"] = "Fade/Grow", none = "None" }
+    Library.DropdownAnimation = Map[string.lower(tostring(Animation or "grow"))] or "Grow"
+end
+
+function Library:GetDropdownAnimation(): string
+    return Library.DropdownAnimation or "Grow"
+end
+
+function Library:SetDropdownTransparency(Transparency: number)
+    assert(typeof(Transparency) == "number", "Expected number for Transparency got: " .. typeof(Transparency))
+    Transparency = math.clamp(Transparency, 0, 1)
+    Library.DropdownTransparency = Transparency
+    for _, Option in Options do
+        if Option.Type == "Dropdown" and Option.Menu and Option.Menu.SetShellTransparency then
+            Option.Menu:SetShellTransparency(Transparency)
+        end
+    end
+end
+
+function Library:SetKeybindPanelCollapsed(Collapsed: boolean, Animated: boolean?)
+    if Library.KeybindPanel then
+        Library.KeybindPanel:SetCollapsed(Collapsed, Animated)
+    end
+end
+
+function Library:ToggleKeybindPanelCollapsed(Animated: boolean?)
+    if Library.KeybindPanel then
+        Library.KeybindPanel:ToggleCollapsed(Animated)
+    end
+end
+
+function Library:SetKeybindPanelTransparency(Transparency: number)
+    if Library.KeybindPanel then
+        Library.KeybindPanel:SetTransparency(Transparency)
     end
 end
 
@@ -3397,6 +3478,16 @@ function Library:AddDraggableLabel(...)
         Label.Visible = Visible
     end
 
+    function DraggableLabel:SetTransparency(Transparency: number)
+        assert(typeof(Transparency) == "number", "Expected number for Transparency got: " .. typeof(Transparency))
+        Transparency = math.clamp(Transparency, 0, 1)
+        Label.BackgroundTransparency = Transparency
+    end
+
+    function DraggableLabel:GetTransparency(): number
+        return Label.BackgroundTransparency
+    end
+
     DraggableLabel:SetIcon(Icon)
     DraggableLabel.Label = Label
 
@@ -3544,6 +3635,7 @@ function Library:AddDraggableMenu(Name: string)
     local Holder = New("Frame", {
         AutomaticSize = Enum.AutomaticSize.XY,
         BackgroundColor3 = "BackgroundColor",
+        ClipsDescendants = true,
         Position = UDim2.fromOffset(6, 6),
         Size = UDim2.fromOffset(0, 0),
         ZIndex = 1,
@@ -3601,6 +3693,22 @@ function Library:AddDraggableMenu(Name: string)
         Parent = Container,
     })
 
+    --// Collapse / expand arrow \\--
+    local CollapseArrow = New("TextButton", {
+        AnchorPoint = Vector2.new(1, 0.5),
+        BackgroundTransparency = 1,
+        Position = UDim2.new(1, -6, 0, 17),
+        Size = UDim2.fromOffset(22, 22),
+        Text = "-",
+        TextSize = 16,
+        ZIndex = 2,
+        Parent = Holder,
+    })
+    if ArrowIcon then
+        CollapseArrow.Text = ""
+        Library:ApplyLucideIcon(CollapseArrow, ArrowIcon, 180)
+    end
+
     Library:MakeDraggable(Holder, Label, true)
 
     if not table.find(Library.DraggableElements, Holder) then
@@ -3609,7 +3717,119 @@ function Library:AddDraggableMenu(Name: string)
 
     PositionDraggable(Holder, Holder.Position)
 
-    return Holder, Container
+    local Menu = {
+        Collapsed = false,
+        Transparency = 0,
+
+        Holder = Holder,
+        Container = Container,
+    }
+    local CollapseTween = nil
+
+    local function MeasureFullHeight(): number
+        local List = Container:FindFirstChildOfClass("UIListLayout")
+        local Content = (List and List.AbsoluteContentSize.Y) or 0
+        return 35 + (Content / Library.DPIScale) + 14
+    end
+
+    function Menu:SetCollapsed(Collapsed: boolean, Animated: boolean?)
+        Collapsed = Collapsed == true
+        if Menu.Collapsed == Collapsed and CollapseTween == nil then
+            return
+        end
+        Menu.Collapsed = Collapsed
+
+        if CollapseTween then
+            StopTween(CollapseTween, true)
+            CollapseTween = nil
+        end
+
+        if ArrowIcon then
+            local TargetRotation = if Collapsed then 0 else 180
+            local ArrowInfo = Library.RotatingChevronTweenInfo or TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+            CollapseArrow.Rotation = TargetRotation
+            pcall(function()
+                TweenService:Create(CollapseArrow, ArrowInfo, { Rotation = TargetRotation }):Play()
+            end)
+        else
+            CollapseArrow.Text = if Collapsed then "+" else "-"
+        end
+
+        if Animated == false then
+            Container.Visible = not Collapsed
+            Holder.AutomaticSize = Enum.AutomaticSize.XY
+            return
+        end
+
+        local ScaleFactor = Library.DPIScale
+        local Abs = Holder.AbsoluteSize
+        local Width = Abs.X / ScaleFactor
+
+        if Collapsed then
+            Holder.AutomaticSize = Enum.AutomaticSize.X
+            Holder.Size = UDim2.fromOffset(Width, Abs.Y / ScaleFactor)
+            local Tween = TweenService:Create(Holder, Library.GroupboxTweenInfo, { Size = UDim2.fromOffset(Width, 35) })
+            CollapseTween = Tween
+            local Connection; Connection = Library:GiveSignal(Tween.Completed:Once(function()
+                if Connection then
+                    Connection:Disconnect()
+                end
+                if CollapseTween == Tween then
+                    StopTween(CollapseTween, true)
+                    CollapseTween = nil
+                end
+                if Menu.Collapsed then
+                    Container.Visible = false
+                    Holder.AutomaticSize = Enum.AutomaticSize.XY
+                end
+            end))
+            Tween:Play()
+        else
+            Container.Visible = true
+            Holder.AutomaticSize = Enum.AutomaticSize.X
+            Holder.Size = UDim2.fromOffset(Width, 35)
+            local Tween = TweenService:Create(Holder, Library.GroupboxTweenInfo, { Size = UDim2.fromOffset(Width, MeasureFullHeight()) })
+            CollapseTween = Tween
+            local Connection; Connection = Library:GiveSignal(Tween.Completed:Once(function()
+                if Connection then
+                    Connection:Disconnect()
+                end
+                if CollapseTween == Tween then
+                    StopTween(CollapseTween, true)
+                    CollapseTween = nil
+                end
+                if not Menu.Collapsed then
+                    Holder.AutomaticSize = Enum.AutomaticSize.XY
+                end
+            end))
+            Tween:Play()
+        end
+    end
+
+    function Menu:ToggleCollapsed(Animated: boolean?)
+        Menu:SetCollapsed(not Menu.Collapsed, Animated)
+    end
+
+    function Menu:SetTransparency(Transparency: number)
+        assert(typeof(Transparency) == "number", "Expected number for Transparency got: " .. typeof(Transparency))
+        Transparency = math.clamp(Transparency, 0, 1)
+        Menu.Transparency = Transparency
+        Holder.BackgroundTransparency = Transparency
+    end
+
+    function Menu:GetTransparency(): number
+        return Menu.Transparency or 0
+    end
+
+    function Menu:SetVisible(Visible: boolean)
+        Holder.Visible = Visible ~= false
+    end
+
+    CollapseArrow.MouseButton1Click:Connect(function()
+        Menu:ToggleCollapsed()
+    end)
+
+    return Holder, Container, Menu
 end
 
 function Library:AddDraggableImageButton(...)
@@ -3795,6 +4015,7 @@ function Library:AddContextMenu(
         Color = "OutlineColor",
         Parent = Menu,
     })
+    local MenuStroke = Menu:FindFirstChildOfClass("UIStroke")
 
     local Corner;
     if IgnoreCornerRadius ~= true then
@@ -3856,6 +4077,9 @@ function Library:AddContextMenu(
         AutoSizeY = List == 1,
 
         OpenCloseTween = nil,
+        FadeTweens = {},
+        _ShellTarget = 0,
+
         Animated = function()
             if not AnimationType or AnimationType == "none" then
                 return false
@@ -3868,6 +4092,49 @@ function Library:AddContextMenu(
             return true, Library[string.format("%sTransitionInfo", AnimationType)] or TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
         end
     }
+
+    --// Dropdown open/close animation modes: Grow, Fade, Fade/Grow, None \\--
+    local MenuAnimMap = { grow = "Grow", fade = "Fade", ["fade/grow"] = "Fade/Grow", none = "None" }
+    local function ResolveMenuAnimation(): string
+        local Mode = Table.GetAnimationMode and Table.GetAnimationMode() or nil
+        return MenuAnimMap[string.lower(tostring(Mode or "grow"))] or "Grow"
+    end
+
+    local function StopMenuFadeTweens()
+        if Table.FadeTweens then
+            for _, FadeTween in Table.FadeTweens do
+                StopTween(FadeTween, true)
+            end
+            table.clear(Table.FadeTweens)
+        end
+    end
+
+    local function TweenMenuShell(ToHidden: boolean, AnimInfo)
+        StopMenuFadeTweens()
+        local BgTween = TweenService:Create(Menu, AnimInfo, { BackgroundTransparency = ToHidden and 1 or (Table._ShellTarget or 0) })
+        table.insert(Table.FadeTweens, BgTween)
+        BgTween:Play()
+        if MenuStroke then
+            local StrokeTween = TweenService:Create(MenuStroke, AnimInfo, { Transparency = ToHidden and 1 or 0 })
+            table.insert(Table.FadeTweens, StrokeTween)
+            StrokeTween:Play()
+        end
+    end
+
+    local function SnapMenuShell(ToHidden: boolean)
+        StopMenuFadeTweens()
+        Menu.BackgroundTransparency = ToHidden and 1 or (Table._ShellTarget or 0)
+        if MenuStroke then
+            MenuStroke.Transparency = ToHidden and 1 or 0
+        end
+    end
+
+    function Table:SetShellTransparency(Transparency: number)
+        Transparency = math.clamp(Transparency, 0, 1)
+        Table._ShellTarget = Transparency
+        StopMenuFadeTweens()
+        Menu.BackgroundTransparency = Transparency
+    end
 
     if List == 1 then
         Table.List = New("UIListLayout", {
@@ -3914,6 +4181,13 @@ function Library:AddContextMenu(
         end
 
         local IsAnimated, TweenInfo = Table.Animated()
+        local MenuAnim = ResolveMenuAnimation()
+        if MenuAnim == "None" then
+            IsAnimated = false
+        end
+        local UseFade = IsAnimated and (MenuAnim == "Fade" or MenuAnim == "Fade/Grow")
+        local UseGrow = IsAnimated and (MenuAnim == "Grow" or MenuAnim == "Fade/Grow")
+
         if IsAnimated == true then
             local OpenSize = TargetSize
             if Table.AutoSizeY then
@@ -3923,30 +4197,44 @@ function Library:AddContextMenu(
                 OpenSize = UDim2.new(TargetSize.X.Scale, TargetSize.X.Offset, 0, FullHeight)
             end
 
-            Menu.Size = UDim2.new(OpenSize.X.Scale, OpenSize.X.Offset, 0, 0)
+            if UseGrow then
+                Menu.Size = UDim2.new(OpenSize.X.Scale, OpenSize.X.Offset, 0, 0)
+            else
+                Menu.Size = OpenSize
+            end
+            if UseFade then
+                SnapMenuShell(true)
+            end
             Menu.Visible = true
 
-            local Tween = TweenService:Create(Menu, TweenInfo, { Size = OpenSize })
-            Table.OpenCloseTween = Tween
+            if UseGrow then
+                local Tween = TweenService:Create(Menu, TweenInfo, { Size = OpenSize })
+                Table.OpenCloseTween = Tween
 
-            local Connection; Connection = Library:GiveSignal(Tween.Completed:Once(function()
-                if Connection then
-                    Connection:Disconnect()
-                end
-
-                if Table.OpenCloseTween == Tween then
-                    StopTween(Table.OpenCloseTween, true)
-                    Table.OpenCloseTween = nil
-
-                    if Table.AutoSizeY then
-                        Menu.AutomaticSize = Enum.AutomaticSize.Y
+                local Connection; Connection = Library:GiveSignal(Tween.Completed:Once(function()
+                    if Connection then
+                        Connection:Disconnect()
                     end
-                end
-            end))
 
-            Tween:Play()
+                    if Table.OpenCloseTween == Tween then
+                        StopTween(Table.OpenCloseTween, true)
+                        Table.OpenCloseTween = nil
+
+                        if Table.AutoSizeY then
+                            Menu.AutomaticSize = Enum.AutomaticSize.Y
+                        end
+                    end
+                end))
+
+                Tween:Play()
+            end
+            if UseFade then
+                TweenMenuShell(false, TweenInfo)
+            end
         else
+            StopMenuFadeTweens()
             Menu.Size = TargetSize
+            SnapMenuShell(false)
             Menu.Visible = true
         end
 
@@ -4004,35 +4292,56 @@ function Library:AddContextMenu(
         end
 
         local IsAnimated, TweenInfo = Table.Animated()
+        local MenuAnim = ResolveMenuAnimation()
+        if MenuAnim == "None" then
+            IsAnimated = false
+        end
+        local UseFade = IsAnimated and (MenuAnim == "Fade" or MenuAnim == "Fade/Grow")
+        local UseGrow = IsAnimated and (MenuAnim == "Grow" or MenuAnim == "Fade/Grow")
+
         if IsAnimated == true then
             if Table.AutoSizeY then
                 Menu.AutomaticSize = Enum.AutomaticSize.None
             end
 
-            local CurrentSize = Menu.Size
-            local CollapsedSize = UDim2.new(CurrentSize.X.Scale, CurrentSize.X.Offset, 0, 0)
+            if UseGrow then
+                local CurrentSize = Menu.Size
+                local CollapsedSize = UDim2.new(CurrentSize.X.Scale, CurrentSize.X.Offset, 0, 0)
 
-            local Tween = TweenService:Create(Menu, TweenInfo, { Size = CollapsedSize })
-            Table.OpenCloseTween = Tween
+                local Tween = TweenService:Create(Menu, TweenInfo, { Size = CollapsedSize })
+                Table.OpenCloseTween = Tween
 
-            local Connection; Connection = Library:GiveSignal(Tween.Completed:Once(function(PlaybackState)
-                if Connection then
-                    Connection:Disconnect()
-                end
-
-                if Table.OpenCloseTween == Tween then
-                    StopTween(Table.OpenCloseTween, true)
-                    Table.OpenCloseTween = nil
-
-                    Menu.Visible = false
-                    if Table.AutoSizeY then
-                        Menu.AutomaticSize = Enum.AutomaticSize.Y
+                local Connection; Connection = Library:GiveSignal(Tween.Completed:Once(function(PlaybackState)
+                    if Connection then
+                        Connection:Disconnect()
                     end
-                end
-            end))
 
-            Tween:Play()
+                    if Table.OpenCloseTween == Tween then
+                        StopTween(Table.OpenCloseTween, true)
+                        Table.OpenCloseTween = nil
+
+                        Menu.Visible = false
+                        if Table.AutoSizeY then
+                            Menu.AutomaticSize = Enum.AutomaticSize.Y
+                        end
+                    end
+                end))
+
+                Tween:Play()
+            end
+            if UseFade then
+                TweenMenuShell(true, TweenInfo)
+            end
+            if not UseGrow then
+                task.delay(TweenInfo.Time, function()
+                    if not Table.Active and not Table.Destroyed then
+                        Menu.Visible = false
+                    end
+                end)
+            end
         else
+            StopMenuFadeTweens()
+            SnapMenuShell(false)
             Menu.Visible = false
         end
     end
@@ -4067,6 +4376,8 @@ function Library:AddContextMenu(
             StopTween(Table.OpenCloseTween, true)
             Table.OpenCloseTween = nil
         end
+
+        StopMenuFadeTweens()
 
         local MenuIndex = table.find(Library.ContextMenus, Table)
         if MenuIndex then
@@ -8677,6 +8988,16 @@ do
         )
         Dropdown.Menu = MenuTable
 
+        local DropdownAnimMap = { default = "Default", grow = "Grow", fade = "Fade", ["fade/grow"] = "Fade/Grow", none = "None" }
+        MenuTable.GetAnimationMode = function()
+            local Mode = DropdownAnimMap[string.lower(tostring(Info.Animation or "default"))] or "Default"
+            if Mode == "Default" then
+                Mode = DropdownAnimMap[string.lower(tostring(Library.DropdownAnimation or "grow"))] or "Grow"
+            end
+            return Mode
+        end
+        MenuTable:SetShellTransparency(Info.MenuTransparency or Library.DropdownTransparency or 0)
+
         local ItemHeight = 21
         local PoolSize = math.max(1, Info.MaxVisibleDropdownItems + 2)
         local Pool = {}
@@ -9447,6 +9768,19 @@ do
 
             Dropdown.DragSelect = Value == true
             Dropdown:BuildDropdownList()
+        end
+
+        function Dropdown:SetAnimation(Animation: string)
+            Info.Animation = Animation
+        end
+
+        function Dropdown:SetMenuTransparency(Transparency: number)
+            assert(typeof(Transparency) == "number", "Expected number for Transparency got: " .. typeof(Transparency))
+            Transparency = math.clamp(Transparency, 0, 1)
+            Info.MenuTransparency = Transparency
+            if MenuTable and MenuTable.SetShellTransparency then
+                MenuTable:SetShellTransparency(Transparency)
+            end
         end
 
         local ToggleDropdown = function()
@@ -10604,6 +10938,10 @@ function Library:SetBackgroundImage(Image: string | number)
 end
 
 function Library:UpdateNotificationPositions(Snap: boolean?)
+    if string.lower(tostring(Library.NotifyAnimation or "tween")) == "none" then
+        Snap = true
+    end
+
     local IsLeft = Library.NotifySide:lower() == "left"
     local XScale = IsLeft and 0 or 1
     local RunningY = 0
@@ -10649,6 +10987,16 @@ function Library:SetNotifySide(Side: string)
     end
 end
 
+function Library:SetNotifyAnimation(Animation: string)
+    local Normalized = string.lower(tostring(Animation or "tween"))
+    local Map = { fade = "Fade", tween = "Tween", resize = "Resize", none = "None" }
+    Library.NotifyAnimation = Map[Normalized] or "Tween"
+end
+
+function Library:GetNotifyAnimation(): string
+    return Library.NotifyAnimation or "Tween"
+end
+
 function Library:Notify(...)
     local Data = {}
     local Info = select(1, ...)
@@ -10671,6 +11019,8 @@ function Library:Notify(...)
         Data.Icon = Info.Icon
         Data.BigIcon = Info.BigIcon
         Data.IconColor = Info.IconColor
+
+        Data.Animation = Info.Animation
 
         Data.Volume = tonumber(Info.Volume) or 3
     else
@@ -10941,6 +11291,35 @@ function Library:Notify(...)
         end
     end
 
+    --// Notification show/hide animation: Fade, Tween (slide), Resize, None \\--
+    local NotifyAnim = string.lower(tostring(Data.Animation or Library.NotifyAnimation or "tween"))
+    if NotifyAnim ~= "fade" and NotifyAnim ~= "resize" and NotifyAnim ~= "none" then
+        NotifyAnim = "tween"
+    end
+    Data.Animation = NotifyAnim
+
+    local function SnapshotTransparencies()
+        local Props = {}
+        local function Capture(Inst)
+            if Inst:IsA("TextLabel") or Inst:IsA("TextButton") or Inst:IsA("TextBox") then
+                table.insert(Props, { Inst = Inst, Prop = "BackgroundTransparency", Target = Inst.BackgroundTransparency })
+                table.insert(Props, { Inst = Inst, Prop = "TextTransparency", Target = Inst.TextTransparency })
+            elseif Inst:IsA("ImageLabel") or Inst:IsA("ImageButton") then
+                table.insert(Props, { Inst = Inst, Prop = "BackgroundTransparency", Target = Inst.BackgroundTransparency })
+                table.insert(Props, { Inst = Inst, Prop = "ImageTransparency", Target = Inst.ImageTransparency })
+            elseif Inst:IsA("UIStroke") then
+                table.insert(Props, { Inst = Inst, Prop = "Transparency", Target = Inst.Transparency })
+            elseif Inst:IsA("GuiObject") then
+                table.insert(Props, { Inst = Inst, Prop = "BackgroundTransparency", Target = Inst.BackgroundTransparency })
+            end
+        end
+        Capture(Holder)
+        for _, Desc in Holder:GetDescendants() do
+            pcall(Capture, Desc)
+        end
+        return Props
+    end
+
     function Data:Destroy(Reason)
         if Data.Destroyed then
             return
@@ -10968,18 +11347,48 @@ function Library:Notify(...)
             end
         end
 
+        local function FinishDestroy()
+            Library.Notifications[FakeBackground] = nil
+            if FakeBackground and FakeBackground.Parent then
+                FakeBackground:Destroy()
+            end
+        end
+
+        if NotifyAnim == "none" then
+            Library:UpdateNotificationPositions(true)
+            FinishDestroy()
+            return
+        end
+
         Library:UpdateNotificationPositions()
 
-        TweenService
-            :Create(Holder, Library.NotifyTweenInfo, {
-                Position = Library.NotifySide:lower() == "left" and UDim2.new(-1, -8, 0, -2) or UDim2.new(1, 8, 0, -2),
-            })
-            :Play()
+        if NotifyAnim == "fade" then
+            local Props = Data._FadeProps
+            if not Props then
+                Props = SnapshotTransparencies()
+                Data._FadeProps = Props
+            end
+            for _, Entry in Props do
+                pcall(function()
+                    TweenService:Create(Entry.Inst, Library.NotifyTweenInfo, { [Entry.Prop] = 1 }):Play()
+                end)
+            end
+        elseif NotifyAnim == "resize" then
+            FakeBackground.ClipsDescendants = true
+            pcall(function()
+                TweenService:Create(FakeBackground, Library.NotifyTweenInfo, {
+                    Size = UDim2.new(0, 0, FakeBackground.Size.Y.Scale, FakeBackground.Size.Y.Offset),
+                }):Play()
+            end)
+        else
+            TweenService
+                :Create(Holder, Library.NotifyTweenInfo, {
+                    Position = Library.NotifySide:lower() == "left" and UDim2.new(-1, -8, 0, -2) or UDim2.new(1, 8, 0, -2),
+                })
+                :Play()
+        end
 
-        task.delay(Library.NotifyTweenInfo.Time, function()
-            Library.Notifications[FakeBackground] = nil
-            FakeBackground:Destroy()
-        end)
+        task.delay(Library.NotifyTweenInfo.Time, FinishDestroy)
     end
 
     local TimerHolder = New("Frame", {
@@ -11026,10 +11435,40 @@ function Library:Notify(...)
 
     Data:Resize()
 
-    FakeBackground.Visible = true
-    TweenService:Create(Holder, Library.NotifyTweenInfo, {
-        Position = UDim2.fromOffset(0, 0),
-    }):Play()
+    if NotifyAnim == "fade" then
+        Data._FadeProps = SnapshotTransparencies()
+        Holder.Position = UDim2.fromOffset(0, 0)
+        for _, Entry in Data._FadeProps do
+            pcall(function()
+                Entry.Inst[Entry.Prop] = 1
+            end)
+        end
+        FakeBackground.Visible = true
+        for _, Entry in Data._FadeProps do
+            if Entry.Target ~= 1 then
+                pcall(function()
+                    TweenService:Create(Entry.Inst, Library.NotifyTweenInfo, { [Entry.Prop] = Entry.Target }):Play()
+                end)
+            end
+        end
+    elseif NotifyAnim == "resize" then
+        Holder.Position = UDim2.fromOffset(0, 0)
+        FakeBackground.ClipsDescendants = true
+        local TargetW = FakeBackground.Size.X.Offset
+        FakeBackground.Size = UDim2.new(0, 0, FakeBackground.Size.Y.Scale, FakeBackground.Size.Y.Offset)
+        FakeBackground.Visible = true
+        TweenService:Create(FakeBackground, Library.NotifyTweenInfo, {
+            Size = UDim2.new(0, TargetW, FakeBackground.Size.Y.Scale, FakeBackground.Size.Y.Offset),
+        }):Play()
+    elseif NotifyAnim == "none" then
+        Holder.Position = UDim2.fromOffset(0, 0)
+        FakeBackground.Visible = true
+    else
+        FakeBackground.Visible = true
+        TweenService:Create(Holder, Library.NotifyTweenInfo, {
+            Position = UDim2.fromOffset(0, 0),
+        }):Play()
+    end
 
     task.defer(function()
         if not Data.Destroyed then
@@ -11101,6 +11540,51 @@ function Library:CreateWindow(WindowInfo)
     WindowInfo.SnapDistance = math.max(0, WindowInfo.SnapDistance)
     WindowInfo.SnapMargin = math.max(0, WindowInfo.SnapMargin)
 
+    --// Sidebar position: Left (default) or Right \\--
+    do
+        local Side = string.lower(tostring(WindowInfo.SidebarPosition or "left"))
+        if Side == "right" then
+            WindowInfo.SidebarPosition = "Right"
+        else
+            WindowInfo.SidebarPosition = "Left"
+        end
+    end
+
+    --// Background blur mode: Default = plain frame (no effect), Blur = blur effect \\--
+    if WindowInfo.BackgroundBlurMode == nil then
+        if WindowInfo.Blur == true then
+            WindowInfo.BackgroundBlurMode = "Blur"
+        else
+            WindowInfo.BackgroundBlurMode = "Default"
+        end
+    else
+        local Mode = string.lower(tostring(WindowInfo.BackgroundBlurMode))
+        WindowInfo.BackgroundBlurMode = (Mode == "blur") and "Blur" or "Default"
+    end
+    WindowInfo.Blur = (WindowInfo.BackgroundBlurMode == "Blur")
+
+    --// Background material: Default, Acrylic, Mica \\--
+    do
+        local BType = string.lower(tostring(WindowInfo.BackgroundType or "default"))
+        if BType == "acrylic" then
+            WindowInfo.BackgroundType = "Acrylic"
+        elseif BType == "mica" then
+            WindowInfo.BackgroundType = "Mica"
+        else
+            WindowInfo.BackgroundType = "Default"
+        end
+    end
+
+    --// Window scale multiplier (on top of DPI) \\--
+    if typeof(WindowInfo.Scale) ~= "number" then
+        WindowInfo.Scale = 1
+    end
+    WindowInfo.Scale = math.clamp(WindowInfo.Scale, 0.5, 1.5)
+
+    --// Window open/close animation timing \\--
+    WindowInfo.WindowAnimationTime = math.clamp(tonumber(WindowInfo.WindowAnimationTime) or 0.25, 0, 2)
+    WindowInfo.WindowTweenOffset = math.clamp(tonumber(WindowInfo.WindowTweenOffset) or 40, 0, 200)
+
     Library.CornerRadius = WindowInfo.CornerRadius
     Library:SetNotifySide(WindowInfo.NotifySide)
     Library.ShowCustomCursor = WindowInfo.ShowCustomCursor
@@ -11152,6 +11636,64 @@ function Library:CreateWindow(WindowInfo)
     local CreateFooterGradient
     local ApplyFooterVisible
     local MainScale
+    local SidebarOnRight = (WindowInfo.SidebarPosition == "Right")
+
+    local function GetWindowBaseScale(): number
+        if MainScale == nil then
+            return Library.DPIScale * (WindowInfo.Scale or 1)
+        end
+        local Base = Library.DPIScale - (tonumber(Library.ScalesOffset[MainScale]) or 0)
+        return Base * (WindowInfo.Scale or 1)
+    end
+
+    --// Window open/close animation presets: Default (= Fade/Scale), Fade/Scale, Fade/Tween, None \\--
+    local AnimPresetMap = { default = "Default", ["fade/scale"] = "Fade/Scale", ["fade/tween"] = "Fade/Tween", none = "None" }
+    local function NormalizeAnimPreset(Value: any): string
+        return AnimPresetMap[string.lower(tostring(Value or "default"))] or "Default"
+    end
+
+    local ValidEasingStyles = {
+        Linear = true, Sine = true, Quad = true, Cubic = true, Quart = true,
+        Quint = true, Exponential = true, Circular = true, Back = true,
+        Elastic = true, Bounce = true,
+    }
+    local function ResolveWindowAnimInfo(): (TweenInfo, number)
+        local Time = math.clamp(tonumber(WindowInfo.WindowAnimationTime) or 0.25, 0, 2)
+        local StyleName = tostring(WindowInfo.WindowEasingStyle or "Quart")
+        local Style = Enum.EasingStyle.Quart
+        if ValidEasingStyles[StyleName] then
+            local Found = Enum.EasingStyle[StyleName]
+            if Found ~= nil then
+                Style = Found
+            end
+        end
+        local DirName = string.lower(tostring(WindowInfo.WindowEasingDirection or "out"))
+        local Direction = Enum.EasingDirection.Out
+        if DirName == "in" then
+            Direction = Enum.EasingDirection.In
+        elseif DirName == "inout" then
+            Direction = Enum.EasingDirection.InOut
+        end
+        return TweenInfo.new(Time, Style, Direction), Time
+    end
+
+    local function GetTweenOffsetVector(): Vector2
+        local Offset = math.clamp(tonumber(WindowInfo.WindowTweenOffset) or 40, 0, 200)
+        local PosName = string.lower(tostring(WindowInfo.WindowTweenPosition or "center"))
+        if PosName == "top" then
+            return Vector2.new(0, -Offset)
+        elseif PosName == "bottom" then
+            return Vector2.new(0, Offset)
+        elseif PosName == "left" then
+            return Vector2.new(-Offset, 0)
+        elseif PosName == "right" then
+            return Vector2.new(Offset, 0)
+        end
+        --// Center: symmetric zoom offset (classic behavior) \\--
+        local W = (MainFrame and MainFrame.AbsoluteSize.X > 0) and MainFrame.AbsoluteSize.X or (WindowInfo.Size.X.Offset > 0 and WindowInfo.Size.X.Offset or 720)
+        local H = (MainFrame and MainFrame.AbsoluteSize.Y > 0) and MainFrame.AbsoluteSize.Y or (WindowInfo.Size.Y.Offset > 0 and WindowInfo.Size.Y.Offset or 600)
+        return Vector2.new(W * 0.05, H * 0.05)
+    end
     local ProfilePanel
     local ProfileDivider
     local ProfileImage
@@ -11272,7 +11814,7 @@ function Library:CreateWindow(WindowInfo)
     end
 
     do
-        Library.KeybindFrame, Library.KeybindContainer = Library:AddDraggableMenu("Keybinds")
+        Library.KeybindFrame, Library.KeybindContainer, Library.KeybindPanel = Library:AddDraggableMenu("Keybinds")
         Library.KeybindFrame.AnchorPoint = Vector2.new(0, 0.5)
         Library.KeybindFrame.Position = UDim2.new(0, 6, 0.5, 0)
         Library.KeybindFrame.Visible = false
@@ -11519,10 +12061,8 @@ function Library:CreateWindow(WindowInfo)
         })
         local SearchBoxStroke = New("UIStroke", {
             Color = "OutlineColor",
-            Transparency = Library.OutlineTransparency or 0,
             Parent = SearchBox,
         })
-        table.insert(Library.Outlines, SearchBoxStroke)
 
         Library:GiveSignal(SearchBox.Focused:Connect(function()
             Library.Registry[SearchBoxStroke].Color = "AccentColor"
@@ -11891,6 +12431,46 @@ function Library:CreateWindow(WindowInfo)
         Library.WindowContainer = Container
     end
 
+    --// Background material (Default / Acrylic / Mica) \\--
+    local function GetMaterialTransparency(): number
+        local Base = WindowInfo.BackgroundTransparency or 0.3
+        if WindowInfo.BackgroundType == "Acrylic" then
+            return math.clamp(Base + 0.2, 0, 0.85)
+        end
+        return Base
+    end
+
+    local function ApplyBackgroundMaterial(Animated: boolean?)
+        local Target = GetMaterialTransparency()
+        if MainFrame then
+            MainFrame.BackgroundTransparency = Target
+            local Cache = TransparencyCache[MainFrame]
+            if Cache then
+                Cache.BackgroundTransparency = Target
+            end
+        end
+        if WindowInfo.BackgroundType == "Acrylic" then
+            WindowInfo.BackgroundBlurMode = "Blur"
+            WindowInfo.Blur = true
+            if (WindowInfo.BlurSize or 0) < 12 then
+                WindowInfo.BlurSize = 16
+            end
+            if Library.Toggled then
+                ApplyBlur(true, Animated ~= false, 0.25)
+            end
+        elseif WindowInfo.BackgroundType == "Mica" then
+            WindowInfo.BackgroundBlurMode = "Default"
+            WindowInfo.Blur = false
+            ApplyBlur(false, Animated ~= false, 0.25)
+        else
+            if Library.Toggled then
+                ApplyBlur(WindowInfo.Blur, Animated ~= false, 0.25)
+            else
+                ApplyBlur(false, false)
+            end
+        end
+    end
+
     --// Window Table \\--
     local Window = {}
     local Fading = false
@@ -12055,6 +12635,55 @@ function Library:CreateWindow(WindowInfo)
         Library.Animations.Groupbox = Enabled == true
     end
 
+    function Window:SetWindowAnimation(Preset: string)
+        WindowInfo.WindowAnimation = NormalizeAnimPreset(Preset)
+        WindowInfo.WindowAnimationIn = nil
+        WindowInfo.WindowAnimationOut = nil
+    end
+
+    function Window:SetWindowAnimationIn(Preset: string?)
+        if Preset == nil or string.lower(tostring(Preset)) == "same" then
+            WindowInfo.WindowAnimationIn = nil
+        else
+            WindowInfo.WindowAnimationIn = NormalizeAnimPreset(Preset)
+        end
+    end
+
+    function Window:SetWindowAnimationOut(Preset: string?)
+        if Preset == nil or string.lower(tostring(Preset)) == "same" then
+            WindowInfo.WindowAnimationOut = nil
+        else
+            WindowInfo.WindowAnimationOut = NormalizeAnimPreset(Preset)
+        end
+    end
+
+    function Window:GetWindowAnimation(): string
+        return WindowInfo.WindowAnimation or "Default"
+    end
+
+    function Window:SetWindowEasing(Style: string?, Direction: string?)
+        if typeof(Style) == "string" and Style ~= "" then
+            WindowInfo.WindowEasingStyle = Style
+        end
+        if typeof(Direction) == "string" and Direction ~= "" then
+            WindowInfo.WindowEasingDirection = Direction
+        end
+    end
+
+    function Window:SetWindowAnimationTime(Time: number)
+        assert(typeof(Time) == "number", "Expected number for Time got: " .. typeof(Time))
+        WindowInfo.WindowAnimationTime = math.clamp(Time, 0, 2)
+    end
+
+    function Window:SetWindowTween(Position: string?, Offset: number?)
+        if typeof(Position) == "string" and Position ~= "" then
+            WindowInfo.WindowTweenPosition = Position
+        end
+        if typeof(Offset) == "number" then
+            WindowInfo.WindowTweenOffset = math.clamp(Offset, 0, 200)
+        end
+    end
+
     function Window:SetAlwaysOnTop(Enabled: boolean)
         WindowInfo.AlwaysOnTop = Enabled == true
         SetAlwaysOnTop(Library.ScreenGui, WindowInfo.AlwaysOnTop)
@@ -12203,16 +12832,56 @@ function Library:CreateWindow(WindowInfo)
 
     local function SetSidebarWidthInstant(Width)
         Width = math.clamp(Width, WindowInfo.SidebarCompactWidth, MainFrame.Size.X.Offset - WindowInfo.MinContainerWidth - 1)
-        DividerLine.Position = UDim2.fromOffset(Width, 0)
-        TitleHolder.Size = UDim2.new(0, Width, 1, 0)
-        RightWrapper.Size = UDim2.new(1, -Width - 57 - 1, 1, -16)
-        Tabs.Size = UDim2.new(0, Width, 1, (WindowInfo.ProfilePanel ~= false) and -119 or -70)
-        Container.Size = UDim2.new(1, -Width - 1, 1, -70)
-        if ProfilePanel then
-            ProfilePanel.Size = UDim2.new(0, Width, 0, 48)
-        end
-        if ProfileDivider then
-            ProfileDivider.Size = UDim2.new(0, Width, 0, 1)
+        if SidebarOnRight then
+            DividerLine.AnchorPoint = Vector2.new(1, 0)
+            DividerLine.Position = UDim2.new(1, -Width, 0, 0)
+            TitleHolder.AnchorPoint = Vector2.new(1, 0)
+            TitleHolder.Position = UDim2.new(1, 0, 0, 0)
+            TitleHolder.Size = UDim2.new(0, Width, 1, 0)
+            RightWrapper.AnchorPoint = Vector2.new(0, 0.5)
+            RightWrapper.Position = UDim2.new(0, 49, 0.5, 0)
+            RightWrapper.Size = UDim2.new(1, -Width - 57 - 1, 1, -16)
+            Tabs.AnchorPoint = Vector2.new(1, 0)
+            Tabs.Position = UDim2.new(1, 0, 0, 49)
+            Tabs.Size = UDim2.new(0, Width, 1, (WindowInfo.ProfilePanel ~= false) and -119 or -70)
+            Container.AnchorPoint = Vector2.new(0, 0)
+            Container.Position = UDim2.fromOffset(0, 49)
+            Container.Size = UDim2.new(1, -Width - 1, 1, -70)
+            if ProfilePanel then
+                ProfilePanel.AnchorPoint = Vector2.new(1, 0)
+                ProfilePanel.Position = UDim2.new(1, 0, 1, -68)
+                ProfilePanel.Size = UDim2.new(0, Width, 0, 48)
+            end
+            if ProfileDivider then
+                ProfileDivider.AnchorPoint = Vector2.new(1, 0)
+                ProfileDivider.Position = UDim2.new(1, 0, 1, -69)
+                ProfileDivider.Size = UDim2.new(0, Width, 0, 1)
+            end
+        else
+            DividerLine.AnchorPoint = Vector2.new(0, 0)
+            DividerLine.Position = UDim2.fromOffset(Width, 0)
+            TitleHolder.AnchorPoint = Vector2.new(0, 0)
+            TitleHolder.Position = UDim2.fromOffset(0, 0)
+            TitleHolder.Size = UDim2.new(0, Width, 1, 0)
+            RightWrapper.AnchorPoint = Vector2.new(1, 0.5)
+            RightWrapper.Position = UDim2.new(1, -49, 0.5, 0)
+            RightWrapper.Size = UDim2.new(1, -Width - 57 - 1, 1, -16)
+            Tabs.AnchorPoint = Vector2.new(0, 0)
+            Tabs.Position = UDim2.fromOffset(0, 49)
+            Tabs.Size = UDim2.new(0, Width, 1, (WindowInfo.ProfilePanel ~= false) and -119 or -70)
+            Container.AnchorPoint = Vector2.new(1, 0)
+            Container.Position = UDim2.new(1, 0, 0, 49)
+            Container.Size = UDim2.new(1, -Width - 1, 1, -70)
+            if ProfilePanel then
+                ProfilePanel.AnchorPoint = Vector2.new(0, 0)
+                ProfilePanel.Position = UDim2.new(0, 0, 1, -68)
+                ProfilePanel.Size = UDim2.new(0, Width, 0, 48)
+            end
+            if ProfileDivider then
+                ProfileDivider.AnchorPoint = Vector2.new(0, 0)
+                ProfileDivider.Position = UDim2.new(0, 0, 1, -69)
+                ProfileDivider.Size = UDim2.new(0, Width, 0, 1)
+            end
         end
     end
 
@@ -12370,7 +13039,70 @@ function Library:CreateWindow(WindowInfo)
     function Window:SetBackgroundTransparency(Transparency: number)
         assert(typeof(Transparency) == "number", "Expected number for Transparency got: " .. typeof(Transparency))
         WindowInfo.BackgroundTransparency = Transparency
-        MainFrame.BackgroundTransparency = Transparency
+        local Target = GetMaterialTransparency()
+        MainFrame.BackgroundTransparency = Target
+        local Cache = TransparencyCache[MainFrame]
+        if Cache then
+            Cache.BackgroundTransparency = Target
+        end
+    end
+
+    function Window:SetBackgroundBlurMode(Mode: string)
+        local Normalized = string.lower(tostring(Mode or "default"))
+        local IsBlur = (Normalized == "blur")
+        WindowInfo.BackgroundBlurMode = IsBlur and "Blur" or "Default"
+        WindowInfo.Blur = IsBlur
+        --// Acrylic requires blur, Mica requires none: fall back to Default on conflict \\--
+        if IsBlur and WindowInfo.BackgroundType == "Mica" then
+            WindowInfo.BackgroundType = "Default"
+        elseif not IsBlur and WindowInfo.BackgroundType == "Acrylic" then
+            WindowInfo.BackgroundType = "Default"
+        end
+        ApplyBackgroundMaterial(true)
+    end
+
+    function Window:GetBackgroundBlurMode(): string
+        return WindowInfo.BackgroundBlurMode or "Default"
+    end
+
+    function Window:SetBackgroundType(BackgroundType: string)
+        local Normalized = string.lower(tostring(BackgroundType or "default"))
+        if Normalized == "acrylic" then
+            WindowInfo.BackgroundType = "Acrylic"
+        elseif Normalized == "mica" then
+            WindowInfo.BackgroundType = "Mica"
+        else
+            WindowInfo.BackgroundType = "Default"
+        end
+        ApplyBackgroundMaterial(true)
+    end
+
+    function Window:GetBackgroundType(): string
+        return WindowInfo.BackgroundType or "Default"
+    end
+
+    function Window:SetScale(Scale: number)
+        assert(typeof(Scale) == "number", "Expected number for Scale got: " .. typeof(Scale))
+        Scale = math.clamp(Scale, 0.5, 1.5)
+        WindowInfo.Scale = Scale
+        if MainScale and MainScale.Parent then
+            MainScale.Scale = (Library.DPIScale - (tonumber(Library.ScalesOffset[MainScale]) or 0)) * Scale
+        end
+    end
+
+    function Window:GetScale(): number
+        return WindowInfo.Scale or 1
+    end
+
+    function Window:SetSidebarPosition(Side: string)
+        local Normalized = string.lower(tostring(Side or "left"))
+        SidebarOnRight = (Normalized == "right")
+        WindowInfo.SidebarPosition = SidebarOnRight and "Right" or "Left"
+        SetSidebarWidthInstant(WidthValue.Value)
+    end
+
+    function Window:GetSidebarPosition(): string
+        return SidebarOnRight and "Right" or "Left"
     end
 
     function Window:SetSidebarCompactOnHover(Enabled: boolean)
@@ -12440,12 +13172,7 @@ function Library:CreateWindow(WindowInfo)
     end
 
     function Window:SetBlur(Enabled: boolean)
-        WindowInfo.Blur = Enabled == true
-        if Library.Toggled then
-            ApplyBlur(WindowInfo.Blur, true, 0.25)
-        else
-            ApplyBlur(false, false)
-        end
+        Window:SetBackgroundBlurMode((Enabled == true) and "Blur" or "Default")
     end
 
     function Window:SetBlurSize(Size: number)
@@ -12472,7 +13199,12 @@ function Library:CreateWindow(WindowInfo)
         local FrameSize = MainFrame.AbsoluteSize
         local CurrentSidebarWidth = math.max(Tabs.AbsoluteSize.X, WindowInfo.SidebarCompactWidth)
 
-        local InX = MousePos.X >= FramePos.X and MousePos.X <= (FramePos.X + CurrentSidebarWidth + 4)
+        local InX
+        if SidebarOnRight then
+            InX = MousePos.X >= (FramePos.X + FrameSize.X - CurrentSidebarWidth - 4) and MousePos.X <= (FramePos.X + FrameSize.X)
+        else
+            InX = MousePos.X >= FramePos.X and MousePos.X <= (FramePos.X + CurrentSidebarWidth + 4)
+        end
         local InY = MousePos.Y >= FramePos.Y and MousePos.Y <= (FramePos.Y + FrameSize.Y)
         return InX and InY
     end
@@ -14920,30 +15652,20 @@ function Library:CreateWindow(WindowInfo)
         local ShouldAnimate = Anims and Anims.ToggleWindow ~= false
 
         if ShouldAnimate then
-            local AnimInfo = Library.WindowAnimationInfo or TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-            local AnimTime = AnimInfo.Time or 0.25
-            local BaseScale = 1
-            if MainScale then
-                BaseScale = Library.DPIScale - (tonumber(Library.ScalesOffset[MainScale]) or 0)
+            local AnimInfo, AnimTime = ResolveWindowAnimInfo()
+            local BaseScale = GetWindowBaseScale()
+            local ScaleClosed = BaseScale * 0.90
+            local MaterialTrans = GetMaterialTransparency()
+            local IsOpening = Library.Toggled
+            local Preset = NormalizeAnimPreset(IsOpening and (WindowInfo.WindowAnimationIn or WindowInfo.WindowAnimation) or (WindowInfo.WindowAnimationOut or WindowInfo.WindowAnimation))
+            if Preset == "Default" then
+                Preset = "Fade/Scale"
             end
+            local UseScale = (Preset == "Fade/Scale")
+            local UseSlide = (Preset == "Fade/Tween")
+            local Instant = (Preset == "None")
 
-            Fading = true
-
-            if Library.Toggled then
-                ApplyBlur(true, true, AnimTime)
-                CacheAllDescendants()
-
-                --// Scale-only animation: UIScale scales around the frame center,
-                --// so Position offsets are never touched and dragging/resizing
-                --// state survives the toggle. \\--
-                local ScaleFactor = 0.90
-
-                if MainScale then
-                    MainScale.Scale = BaseScale * ScaleFactor
-                end
-                MainFrame.BackgroundTransparency = 1
-                MainFrame.Visible = true
-
+            local function SnapAllToTransparent()
                 for Desc, Cache in TransparencyCache do
                     if Desc and Desc.Parent and Desc:IsDescendantOf(MainFrame) then
                         for Prop, _ in Cache do
@@ -14953,14 +15675,21 @@ function Library:CreateWindow(WindowInfo)
                         end
                     end
                 end
+            end
 
-                if MainScale then
-                    TweenService:Create(MainScale, AnimInfo, { Scale = BaseScale }):Play()
+            local function SnapAllToCache()
+                for Desc, Cache in TransparencyCache do
+                    if Desc and Desc.Parent and Desc:IsDescendantOf(MainFrame) then
+                        for Prop, Val in Cache do
+                            pcall(function()
+                                (Desc :: any)[Prop] = Val
+                            end)
+                        end
+                    end
                 end
-                TweenService:Create(MainFrame, AnimInfo, {
-                    BackgroundTransparency = WindowInfo.BackgroundTransparency or 0.3,
-                }):Play()
+            end
 
+            local function TweenAllToCache()
                 for Desc, Cache in TransparencyCache do
                     if Desc and Desc.Parent and Desc:IsDescendantOf(MainFrame) then
                         local TargetProps = {}
@@ -14978,27 +15707,9 @@ function Library:CreateWindow(WindowInfo)
                         end
                     end
                 end
+            end
 
-                task.delay(AnimTime, function()
-                    if MainScale then
-                        MainScale.Scale = BaseScale
-                    end
-                    MainFrame.BackgroundTransparency = WindowInfo.BackgroundTransparency or 0.3
-                    Fading = false
-                end)
-            else
-                ApplyBlur(false, true, AnimTime)
-                RefreshOpenCache()
-
-                local ScaleFactor = 0.90
-
-                if MainScale then
-                    TweenService:Create(MainScale, AnimInfo, { Scale = BaseScale * ScaleFactor }):Play()
-                end
-                TweenService:Create(MainFrame, AnimInfo, {
-                    BackgroundTransparency = 1,
-                }):Play()
-
+            local function TweenAllToHidden()
                 for Desc, Cache in TransparencyCache do
                     if Desc and Desc.Parent and Desc:IsDescendantOf(MainFrame) then
                         local TargetProps = {}
@@ -15016,14 +15727,97 @@ function Library:CreateWindow(WindowInfo)
                         end
                     end
                 end
+            end
 
-                task.delay(AnimTime, function()
+            Fading = true
+
+            if IsOpening then
+                CacheAllDescendants()
+
+                local TargetPos = MainFrame.Position
+                local StartPos = TargetPos
+                if UseSlide then
+                    local Slide = GetTweenOffsetVector()
+                    StartPos = UDim2.new(TargetPos.X.Scale, TargetPos.X.Offset + Slide.X, TargetPos.Y.Scale, TargetPos.Y.Offset + Slide.Y)
+                end
+
+                if MainScale then
+                    MainScale.Scale = if UseScale then ScaleClosed else BaseScale
+                end
+                MainFrame.Position = StartPos
+                MainFrame.BackgroundTransparency = 1
+                MainFrame.Visible = true
+                SnapAllToTransparent()
+
+                if Instant then
+                    if MainScale then
+                        MainScale.Scale = BaseScale
+                    end
+                    MainFrame.Position = TargetPos
+                    MainFrame.BackgroundTransparency = MaterialTrans
+                    SnapAllToCache()
+                    ApplyBlur(true, false)
+                    Fading = false
+                else
+                    ApplyBlur(true, true, AnimTime)
+                    if UseScale and MainScale then
+                        TweenService:Create(MainScale, AnimInfo, { Scale = BaseScale }):Play()
+                    end
+                    local OpenProps: { [string]: any } = { BackgroundTransparency = MaterialTrans }
+                    if UseSlide then
+                        OpenProps.Position = TargetPos
+                    end
+                    TweenService:Create(MainFrame, AnimInfo, OpenProps):Play()
+                    TweenAllToCache()
+
+                    task.delay(AnimTime, function()
+                        if MainScale then
+                            MainScale.Scale = BaseScale
+                        end
+                        MainFrame.Position = TargetPos
+                        MainFrame.BackgroundTransparency = MaterialTrans
+                        Fading = false
+                    end)
+                end
+            else
+                RefreshOpenCache()
+
+                local CurrentPos = MainFrame.Position
+                local EndPos = CurrentPos
+                if UseSlide then
+                    local Slide = GetTweenOffsetVector()
+                    EndPos = UDim2.new(CurrentPos.X.Scale, CurrentPos.X.Offset + Slide.X, CurrentPos.Y.Scale, CurrentPos.Y.Offset + Slide.Y)
+                end
+
+                if Instant then
                     MainFrame.Visible = false
                     if MainScale then
                         MainScale.Scale = BaseScale
                     end
+                    MainFrame.Position = CurrentPos
+                    ApplyBlur(false, false)
                     Fading = false
-                end)
+                else
+                    ApplyBlur(false, true, AnimTime)
+                    if UseScale and MainScale then
+                        TweenService:Create(MainScale, AnimInfo, { Scale = ScaleClosed }):Play()
+                    end
+                    local CloseProps: { [string]: any } = { BackgroundTransparency = 1 }
+                    if UseSlide then
+                        CloseProps.Position = EndPos
+                    end
+                    TweenService:Create(MainFrame, AnimInfo, CloseProps):Play()
+                    TweenAllToHidden()
+
+                    task.delay(AnimTime, function()
+                        MainFrame.Visible = false
+                        if MainScale then
+                            MainScale.Scale = BaseScale
+                        end
+                        MainFrame.Position = CurrentPos
+                        Fading = false
+                    end)
+                end
             end
         else
             MainFrame.Visible = Library.Toggled
@@ -15138,7 +15932,7 @@ function Library:CreateWindow(WindowInfo)
 
             if Dragging and IsHoverInput(Input) then
                 local Delta = Input.Position - StartPos
-                local Width = StartWidth + Delta.X
+                local Width = StartWidth + (SidebarOnRight and -Delta.X or Delta.X)
 
                 if WindowInfo.DisableCompactingSnap then
                     Window:SetSidebarWidth(Width)
@@ -15155,6 +15949,14 @@ function Library:CreateWindow(WindowInfo)
     end
 
     Window:SetAlwaysOnTop(WindowInfo.AlwaysOnTop)
+    Window._MainScale = MainScale
+    if (WindowInfo.Scale or 1) ~= 1 and MainScale then
+        MainScale.Scale = GetWindowBaseScale()
+    end
+    if SidebarOnRight then
+        SetSidebarWidthInstant(WidthValue.Value)
+    end
+    ApplyBackgroundMaterial(false)
     if WindowInfo.EnableCompacting and WindowInfo.SidebarCompacted then
         Window:SetSidebarWidth(WindowInfo.SidebarCompactWidth)
     end
@@ -16065,6 +16867,7 @@ function Library:Unload()
     Library.WindowContainer = nil
     Library.KeybindFrame = nil
     Library.KeybindContainer = nil
+    Library.KeybindPanel = nil
     Library.BlurEffect = nil
 
     getgenv().Library = nil

@@ -35,6 +35,14 @@ local Window = Library:CreateWindow({
 	Icon = 95816097006870,
 	NotifySide = "Right",
 	ShowCustomCursor = true,
+	SidebarPosition = "Left", -- "Left" or "Right", moves the sidebar + content
+	BackgroundBlurMode = "Default", -- "Default" (plain frame) or "Blur" (blur effect)
+	BackgroundType = "Default", -- "Default", "Acrylic" (translucent + blur) or "Mica" (opaque, no blur)
+	Scale = 1, -- window scale multiplier (0.5 - 1.5)
+	WindowAnimation = "Default", -- "Default" (= Fade/Scale), "Fade/Scale", "Fade/Tween", "None"
+	-- WindowAnimationIn / WindowAnimationOut override open vs close separately ("Same" clears the override)
+	-- WindowEasingStyle = "Quart", WindowEasingDirection = "Out", WindowAnimationTime = 0.25
+	-- WindowTweenPosition = "Center", WindowTweenOffset = 40 (used by Fade/Tween)
 })
 
 -- CALLBACK NOTE:
@@ -722,7 +730,7 @@ end)
 
 -- DraggableLabel
 
-Library:AddDraggableLabel("This is a Draggable Label")
+local MyDraggableLabel = Library:AddDraggableLabel("This is a Draggable Label")
 
 -- UI Settings
 local MenuGroup = Tabs["UI Settings"]:AddGroupbox({
@@ -737,6 +745,33 @@ MenuGroup:AddToggle("KeybindMenuOpen", {
 	Callback = function(value)
 		Library.KeybindFrame.Visible = value
 	end,
+})
+MenuGroup:AddToggle("KeybindPanelCollapsed", {
+	Default = false,
+	Text = "Collapse Keybind Panel",
+	Callback = function(value)
+		Library:SetKeybindPanelCollapsed(value)
+	end,
+})
+MenuGroup:AddSlider("KeybindPanelTransparencySlider", {
+	Text = "Keybind Panel Transparency",
+	Default = 0,
+	Min = 0,
+	Max = 1,
+	Rounding = 2,
+	Callback = function(value)
+		Library:SetKeybindPanelTransparency(value)
+	end
+})
+MenuGroup:AddSlider("DraggableLabelTransparencySlider", {
+	Text = "Draggable Label Transparency",
+	Default = 0,
+	Min = 0,
+	Max = 1,
+	Rounding = 2,
+	Callback = function(value)
+		MyDraggableLabel:SetTransparency(value)
+	end
 })
 MenuGroup:AddToggle("ShowCustomCursor", {
 	Text = "Custom Cursor",
@@ -762,6 +797,16 @@ MenuGroup:AddDropdown("NotificationSide", {
 		Library:SetNotifySide(Value)
 	end,
 })
+MenuGroup:AddDropdown("NotificationAnimation", {
+	Values = { "Fade", "Tween", "Resize", "None" },
+	Default = "Tween",
+
+	Text = "Notification Animation",
+
+	Callback = function(Value)
+		Library:SetNotifyAnimation(Value)
+	end,
+})
 MenuGroup:AddDropdown("DPIDropdown", {
 	Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
 	Default = "100%",
@@ -773,6 +818,46 @@ MenuGroup:AddDropdown("DPIDropdown", {
 		local DPI = tonumber(Value)
 
 		Library:SetDPIScale(DPI)
+	end,
+})
+MenuGroup:AddSlider("WindowScaleSlider", {
+	Text = "Window Scale",
+	Default = 100,
+	Min = 50,
+	Max = 150,
+	Rounding = 0,
+	Callback = function(value)
+		Window:SetScale(value / 100)
+	end
+})
+MenuGroup:AddDropdown("SidebarPositionDropdown", {
+	Values = { "Left", "Right" },
+	Default = "Left",
+
+	Text = "Sidebar Position",
+
+	Callback = function(Value)
+		Window:SetSidebarPosition(Value)
+	end,
+})
+MenuGroup:AddDropdown("BackgroundBlurModeDropdown", {
+	Values = { "Default", "Blur" },
+	Default = "Default",
+
+	Text = "Background Blur",
+
+	Callback = function(Value)
+		Window:SetBackgroundBlurMode(Value)
+	end,
+})
+MenuGroup:AddDropdown("BackgroundTypeDropdown", {
+	Values = { "Default", "Acrylic", "Mica" },
+	Default = "Default",
+
+	Text = "Background Type",
+
+	Callback = function(Value)
+		Window:SetBackgroundType(Value)
 	end,
 })
 
@@ -840,6 +925,99 @@ MenuGroup:AddToggle("ToggleWindowAnimation", {
 		Library.Animations.ToggleWindow = Value
 	end,
 })
+MenuGroup:AddDropdown("WindowAnimationPreset", {
+	Values = { "Default", "Fade/Scale", "Fade/Tween", "None" },
+	Default = "Default",
+	Text = "Open + Close Animation",
+	Callback = function(Value)
+		Window:SetWindowAnimation(Value)
+	end,
+})
+MenuGroup:AddDropdown("WindowAnimationIn", {
+	Values = { "Same", "Default", "Fade/Scale", "Fade/Tween", "None" },
+	Default = "Same",
+	Text = "Open (In) Override",
+	Callback = function(Value)
+		Window:SetWindowAnimationIn(Value)
+	end,
+})
+MenuGroup:AddDropdown("WindowAnimationOut", {
+	Values = { "Same", "Default", "Fade/Scale", "Fade/Tween", "None" },
+	Default = "Same",
+	Text = "Close (Out) Override",
+	Callback = function(Value)
+		Window:SetWindowAnimationOut(Value)
+	end,
+})
+MenuGroup:AddDropdown("WindowEasingStyle", {
+	Values = { "Linear", "Sine", "Quad", "Cubic", "Quart", "Quint", "Exponential", "Circular", "Back", "Elastic", "Bounce" },
+	Default = "Quart",
+	Text = "Animation Easing",
+	Callback = function(Value)
+		Window:SetWindowEasing(Value)
+	end,
+})
+MenuGroup:AddDropdown("WindowEasingDirection", {
+	Values = { "In", "Out", "InOut" },
+	Default = "Out",
+	Text = "Easing Direction",
+	Callback = function(Value)
+		Window:SetWindowEasing(nil, Value)
+	end,
+})
+MenuGroup:AddSlider("WindowAnimationTime", {
+	Text = "Animation Time",
+	Default = 0.25,
+	Min = 0,
+	Max = 1,
+	Rounding = 2,
+	Callback = function(value)
+		Window:SetWindowAnimationTime(value)
+	end
+})
+MenuGroup:AddDropdown("WindowTweenPosition", {
+	Values = { "Center", "Top", "Bottom", "Left", "Right" },
+	Default = "Center",
+	Text = "Tween Position",
+	Callback = function(Value)
+		Window:SetWindowTween(Value)
+	end,
+})
+MenuGroup:AddSlider("WindowTweenOffset", {
+	Text = "Tween Offset",
+	Default = 40,
+	Min = 0,
+	Max = 200,
+	Rounding = 0,
+	Callback = function(value)
+		Window:SetWindowTween(nil, value)
+	end
+})
+MenuGroup:AddToggle("DropdownAnimationToggle", {
+	Text = "Dropdown Animation",
+	Default = false,
+	Callback = function(Value)
+		Library.Animations.Dropdown = Value
+	end,
+})
+MenuGroup:AddDropdown("DropdownAnimationPreset", {
+	Values = { "Grow", "Fade", "Fade/Grow", "None" },
+	Default = "Grow",
+	Text = "Dropdown Animation",
+	Callback = function(Value)
+		Library:SetDropdownAnimation(Value)
+	end,
+})
+MenuGroup:AddSlider("DropdownTransparencySlider", {
+	Text = "Dropdown Transparency",
+	Default = 0,
+	Min = 0,
+	Max = 1,
+	Rounding = 2,
+	Callback = function(value)
+		Library:SetDropdownTransparency(value)
+	end
+})
 MenuGroup:AddToggle("GroupboxAnimationToggle", {
 	Text = "Groupbox Collapse Animation",
 	Default = false,
@@ -889,13 +1067,6 @@ MenuGroup:AddToggle("ProfilePanelToggle", {
 	Default = true,
 	Callback = function(Value)
 		Window:SetProfileVisible(Value)
-	end,
-})
-MenuGroup:AddToggle("BlurBackgroundToggle", {
-	Text = "Blur Background",
-	Default = true,
-	Callback = function(Value)
-		Window:SetBlur(Value)
 	end,
 })
 

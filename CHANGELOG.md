@@ -1,3 +1,31 @@
+## 12.10.2026
+
+```diff
+[features]
++ Footer holographic gradient with toggle, transparency and gradient speed (Window:SetFooterGradient/SetFooterGradientSpeed/SetFooterVisible/SetFooterTransparency)
++ Element transparency: groupbox, searchbar and outline (Window:SetGroupboxTransparency/SetSearchbarTransparency/SetOutlineTransparency, Library:SetGroupboxTransparency/SetSearchbarTransparency/SetOutlineTransparency)
++ Background blur modes: Default (plain frame) / Blur (Window:SetBackgroundBlurMode, WindowInfo.BackgroundBlurMode)
++ Background types: Default / Acrylic / Mica (Window:SetBackgroundType)
++ Window Scale multiplier on top of DPI (Window:SetScale/GetScale, WindowInfo.Scale)
++ Sidebar position Left / Right (Window:SetSidebarPosition/GetSidebarPosition)
++ Groupbox collapse/expand animation with chevron tween (Window:SetGroupboxAnimation)
++ Notification animations: Fade / Tween / Resize / None (Library:SetNotifyAnimation, per-notify Animation override)
++ Window open/close animations: Default / Fade-Scale / Fade-Tween / None, with separate In/Out overrides, easing style/direction, time and tween position/offset
++ Dropdown open animations: Grow / Fade / Fade-Grow / None, with menu transparency (Library:SetDropdownAnimation, Dropdown:SetAnimation/SetMenuTransparency)
++ Keybind panel collapse/expand and transparency (Library:SetKeybindPanelCollapsed/SetKeybindPanelTransparency)
++ Draggable label transparency (DraggableLabel:SetTransparency)
+
+[changes]
++ Window toggle animation is scale-only and no longer touches Position offsets, so drag/resize state survives toggling
++ Footer gradient is created lazily, so SetFooterGradient works even when created with FooterGradient = false
++ Example menu: BlurBackgroundToggle replaced by BackgroundBlurMode dropdown (default is now the plain frame)
+
+[fixed]
++ Fixed window position drifting after toggling with scale animation
++ Fixed SetFooterGradient doing nothing when the window was created with FooterGradient = false
++ Fixed window Scale multiplier being wiped when SetDPIScale is called
+```
+
 ## 03.10.2026
 
 ```diff
