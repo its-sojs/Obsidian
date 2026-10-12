@@ -796,11 +796,65 @@ MenuGroup:AddSlider("BackgroundTransparencySlider", {
 		Window:SetBackgroundTransparency(value)
 	end
 })
+MenuGroup:AddSlider("GroupboxTransparencySlider", {
+	Text = "Groupbox Transparency",
+	Default = 0,
+	Min = 0,
+	Max = 1,
+	Rounding = 2,
+	Callback = function(value)
+		Window:SetGroupboxTransparency(value)
+	end
+})
+MenuGroup:AddSlider("SearchbarTransparencySlider", {
+	Text = "Searchbar Transparency",
+	Default = 0,
+	Min = 0,
+	Max = 1,
+	Rounding = 2,
+	Callback = function(value)
+		Window:SetSearchbarTransparency(value)
+	end
+})
+MenuGroup:AddSlider("OutlineTransparencySlider", {
+	Text = "Outline Transparency",
+	Default = 0,
+	Min = 0,
+	Max = 1,
+	Rounding = 2,
+	Callback = function(value)
+		Window:SetOutlineTransparency(value)
+	end
+})
 MenuGroup:AddToggle("SidebarCompactOnHover", {
 	Text = "Sidebar Compact on Hover",
 	Default = true,
 	Callback = function(Value)
 		Window:SetSidebarCompactOnHover(Value)
+	end,
+})
+MenuGroup:AddToggle("ToggleWindowAnimation", {
+	Text = "Window Scale/Fade Animation",
+	Default = true,
+	Callback = function(Value)
+		Library.Animations.ToggleWindow = Value
+	end,
+})
+MenuGroup:AddToggle("GroupboxAnimationToggle", {
+	Text = "Groupbox Collapse Animation",
+	Default = false,
+	Callback = function(Value)
+		Window:SetGroupboxAnimation(Value)
+	end,
+})
+
+MenuGroup:AddDivider()
+MenuGroup:AddLabel("Footer (gradient / solid toggle)")
+MenuGroup:AddToggle("FooterVisibleToggle", {
+	Text = "Show Footer",
+	Default = true,
+	Callback = function(Value)
+		Window:SetFooterVisible(Value)
 	end,
 })
 MenuGroup:AddToggle("FooterGradientToggle", {
@@ -810,12 +864,25 @@ MenuGroup:AddToggle("FooterGradientToggle", {
 		Window:SetFooterGradient(Value)
 	end,
 })
-MenuGroup:AddToggle("ToggleWindowAnimation", {
-	Text = "Window Scale/Fade Animation",
-	Default = true,
-	Callback = function(Value)
-		Library.Animations.ToggleWindow = Value
-	end,
+MenuGroup:AddSlider("FooterTransparencySlider", {
+	Text = "Footer Transparency",
+	Default = 0,
+	Min = 0,
+	Max = 1,
+	Rounding = 2,
+	Callback = function(value)
+		Window:SetFooterTransparency(value)
+	end
+})
+MenuGroup:AddSlider("FooterGradientSpeedSlider", {
+	Text = "Footer Gradient Speed",
+	Default = 0.15,
+	Min = 0,
+	Max = 1,
+	Rounding = 2,
+	Callback = function(value)
+		Window:SetFooterGradientSpeed(value)
+	end
 })
 MenuGroup:AddToggle("ProfilePanelToggle", {
 	Text = "Sidebar Profile Panel",

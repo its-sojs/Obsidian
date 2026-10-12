@@ -298,6 +298,12 @@ local Library = {
     Registry = {},
     Scales = {},
     ScalesOffset = {},
+    Outlines = {},
+
+    --// Element Transparency (0 = opaque, 1 = invisible) \\--
+    GroupboxTransparency = 0,
+    SearchbarTransparency = 0,
+    OutlineTransparency = 0,
 
     --// Mouse \\--
     OriginalMouseIconEnabled = UserInputService.MouseIconEnabled,
@@ -377,6 +383,8 @@ local Templates = {
     Window = {
         Title = "No Title",
         Footer = "https://dsc.gg/getorigin",
+        FooterVisible = true,
+        FooterTransparency = 0,
         FooterGradient = true,
         FooterGradientSpeed = 0.15,
 
@@ -435,6 +443,11 @@ local Templates = {
         BackgroundTransparency = 0.3,
         Blur = true,
         BlurSize = 20,
+
+        --// Element Transparency \\--
+        GroupboxTransparency = 0,
+        SearchbarTransparency = 0,
+        OutlineTransparency = 0,
 
         --// Animations \\--
         Animations = {
@@ -2566,15 +2579,19 @@ function Library:AddOutline(Frame: GuiObject)
     local OutlineStroke = New("UIStroke", {
         Color = "OutlineColor",
         Thickness = 1,
+        Transparency = Library.OutlineTransparency or 0,
         ZIndex = 2,
         Parent = Frame,
     })
     local ShadowStroke = New("UIStroke", {
         Color = "DarkColor",
         Thickness = 1.5,
+        Transparency = Library.OutlineTransparency or 0,
         ZIndex = 1,
         Parent = Frame,
     })
+    table.insert(Library.Outlines, OutlineStroke)
+    table.insert(Library.Outlines, ShadowStroke)
     return OutlineStroke, ShadowStroke
 end
 
@@ -2686,6 +2703,77 @@ function Library:PlayTabAnimation(Tab, Showing: boolean, OnComplete: (() -> ())?
         if OnComplete then
             OnComplete()
         end
+    end
+end
+
+function Library:SetOutlineTransparency(Transparency: number)
+    assert(typeof(Transparency) == "number", "Expected number for Transparency got: " .. typeof(Transparency))
+    Transparency = math.clamp(Transparency, 0, 1)
+    Library.OutlineTransparency = Transparency
+    for _, Stroke in Library.Outlines do
+        if Stroke and Stroke.Parent then
+            pcall(function()
+                Stroke.Transparency = Transparency
+            end)
+            local Cache = TransparencyCache[Stroke]
+            if Cache then
+                Cache.Transparency = Transparency
+            end
+        end
+    end
+end
+
+function Library:SetGroupboxTransparency(Transparency: number)
+    assert(typeof(Transparency) == "number", "Expected number for Transparency got: " .. typeof(Transparency))
+    Transparency = math.clamp(Transparency, 0, 1)
+    Library.GroupboxTransparency = Transparency
+    local function ApplyToBox(Box)
+        if Box and Box.Holder and Box.Holder.Parent then
+            pcall(function()
+                Box.Holder.BackgroundTransparency = Transparency
+            end)
+            local Cache = TransparencyCache[Box.Holder]
+            if Cache then
+                Cache.BackgroundTransparency = Transparency
+            end
+        end
+        if Box and Box.DependencyBoxes then
+            for _, Dep in Box.DependencyBoxes do
+                ApplyToBox(Dep)
+            end
+        end
+    end
+    for _, Tab in Library.Tabs do
+        if typeof(Tab) ~= "table" then
+            continue
+        end
+        if Tab.Groupboxes then
+            for _, Groupbox in Tab.Groupboxes do
+                ApplyToBox(Groupbox)
+            end
+        end
+        if Tab.Tabboxes then
+            for _, Tabbox in Tab.Tabboxes do
+                if Tabbox and Tabbox.Tabs then
+                    for _, SubTab in Tabbox.Tabs do
+                        if SubTab and SubTab.Groupboxes then
+                            for _, Groupbox in SubTab.Groupboxes do
+                                ApplyToBox(Groupbox)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+function Library:SetSearchbarTransparency(Transparency: number)
+    assert(typeof(Transparency) == "number", "Expected number for Transparency got: " .. typeof(Transparency))
+    Transparency = math.clamp(Transparency, 0, 1)
+    Library.SearchbarTransparency = Transparency
+    if Library.Window and Library.Window.SetSearchbarTransparency then
+        Library.Window:SetSearchbarTransparency(Transparency)
     end
 end
 
@@ -10346,6 +10434,7 @@ do
         do
             DepGroupboxContainer = New("Frame", {
                 BackgroundColor3 = "BackgroundColor",
+                BackgroundTransparency = Library.GroupboxTransparency or 0,
                 Size = UDim2.fromScale(1, 0),
                 Visible = false,
                 Parent = BoxHolder,
@@ -11020,6 +11109,16 @@ function Library:CreateWindow(WindowInfo)
     Library.GlobalSearch = WindowInfo.GlobalSearch
 
     Library.Animations = WindowInfo.Animations
+    Library.GroupboxTransparency = math.clamp(WindowInfo.GroupboxTransparency or 0, 0, 1)
+    Library.SearchbarTransparency = math.clamp(WindowInfo.SearchbarTransparency or 0, 0, 1)
+    Library.OutlineTransparency = math.clamp(WindowInfo.OutlineTransparency or 0, 0, 1)
+    for _, Stroke in Library.Outlines do
+        if Stroke and Stroke.Parent then
+            pcall(function()
+                Stroke.Transparency = Library.OutlineTransparency
+            end)
+        end
+    end
     Library.TabTransitionInfo = TweenInfo.new(
         math.max(0, WindowInfo.TabTransitionTime or 0.22),
         Enum.EasingStyle.Quad,
@@ -11046,8 +11145,12 @@ function Library:CreateWindow(WindowInfo)
     local HasBackgroundImage = false
     local BottomBackground
     local BottomBackgroundCorner
+    local BottomClip
+    local BottomBar
     local FooterLabel
     local FooterGradient
+    local CreateFooterGradient
+    local ApplyFooterVisible
     local MainScale
     local ProfilePanel
     local ProfileDivider
@@ -11388,6 +11491,7 @@ function Library:CreateWindow(WindowInfo)
 
         SearchBox = New("TextBox", {
             BackgroundColor3 = "MainColor",
+            BackgroundTransparency = Library.SearchbarTransparency or 0,
             PlaceholderText = "Search",
             Size = WindowInfo.SearchbarSize,
             TextScaled = true,
@@ -11415,8 +11519,10 @@ function Library:CreateWindow(WindowInfo)
         })
         local SearchBoxStroke = New("UIStroke", {
             Color = "OutlineColor",
+            Transparency = Library.OutlineTransparency or 0,
             Parent = SearchBox,
         })
+        table.insert(Library.Outlines, SearchBoxStroke)
 
         Library:GiveSignal(SearchBox.Focused:Connect(function()
             Library.Registry[SearchBoxStroke].Color = "AccentColor"
@@ -11457,7 +11563,7 @@ function Library:CreateWindow(WindowInfo)
         end
 
         --// Bottom Bar \\--
-        local BottomClip = New("Frame", {
+        BottomClip = New("Frame", {
             AnchorPoint = Vector2.new(0, 1),
             BackgroundTransparency = 1,
             ClipsDescendants = true,
@@ -11485,7 +11591,7 @@ function Library:CreateWindow(WindowInfo)
             ZIndex = 3,
         })
 
-        local BottomBar = New("Frame", {
+        BottomBar = New("Frame", {
             AnchorPoint = Vector2.new(0, 1),
             BackgroundTransparency = 1,
             Position = UDim2.fromScale(0, 1),
@@ -11512,58 +11618,78 @@ function Library:CreateWindow(WindowInfo)
             Parent = BottomBar,
         })
 
-        if WindowInfo.FooterGradient ~= false then
+        local HoloPalette = {
+            Color3.fromRGB(115, 235, 255),
+            Color3.fromRGB(160, 160, 255),
+            Color3.fromRGB(210, 150, 255),
+            Color3.fromRGB(255, 140, 225),
+            Color3.fromRGB(255, 210, 150),
+            Color3.fromRGB(140, 255, 215),
+        }
+        local PaletteSize = #HoloPalette
+
+        local function GetHoloColor(phase: number): Color3
+            phase = phase % 1
+            if phase < 0 then
+                phase = phase + 1
+            end
+            local scaled = phase * PaletteSize
+            local index1 = math.floor(scaled)
+            local alpha = scaled - index1
+            local c1 = HoloPalette[index1 + 1]
+            local c2 = HoloPalette[((index1 + 1) % PaletteSize) + 1]
+            return c1:Lerp(c2, alpha)
+        end
+
+        local function UpdateFooterGradient(phase: number)
+            if not FooterGradient or not FooterGradient.Parent then
+                return
+            end
+            if FooterGradient.Enabled == false then
+                return
+            end
+            FooterGradient.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0.0, GetHoloColor(phase)),
+                ColorSequenceKeypoint.new(0.2, GetHoloColor(phase + 0.2)),
+                ColorSequenceKeypoint.new(0.4, GetHoloColor(phase + 0.4)),
+                ColorSequenceKeypoint.new(0.6, GetHoloColor(phase + 0.6)),
+                ColorSequenceKeypoint.new(0.8, GetHoloColor(phase + 0.8)),
+                ColorSequenceKeypoint.new(1.0, GetHoloColor(phase + 1.0)),
+            })
+        end
+
+        CreateFooterGradient = function()
+            if FooterGradient and FooterGradient.Parent then
+                return FooterGradient
+            end
             FooterGradient = New("UIGradient", {
                 Name = "HolographicGradient",
+                Enabled = WindowInfo.FooterGradient ~= false,
                 Parent = FooterLabel,
             })
+            UpdateFooterGradient(os.clock() * (WindowInfo.FooterGradientSpeed or 0.15))
+            return FooterGradient
+        end
 
-            local HoloPalette = {
-                Color3.fromRGB(115, 235, 255), -- Aqua / Cyan
-                Color3.fromRGB(160, 160, 255), -- Periwinkle
-                Color3.fromRGB(210, 150, 255), -- Lavender
-                Color3.fromRGB(255, 140, 225), -- Holo Pink
-                Color3.fromRGB(255, 210, 150), -- Peach / Gold
-                Color3.fromRGB(140, 255, 215), -- Mint / Seafoam
-            }
-            local PaletteSize = #HoloPalette
+        CreateFooterGradient()
 
-            local function GetHoloColor(phase: number): Color3
-                phase = phase % 1
-                if phase < 0 then
-                    phase = phase + 1
-                end
-                local scaled = phase * PaletteSize
-                local index1 = math.floor(scaled)
-                local alpha = scaled - index1
-                local c1 = HoloPalette[index1 + 1]
-                local c2 = HoloPalette[((index1 + 1) % PaletteSize) + 1]
-                return c1:Lerp(c2, alpha)
+        Library:GiveSignal(RunService.RenderStepped:Connect(function()
+            if not Library.Toggled or not (ScreenGui and ScreenGui.Parent) then
+                return
             end
-
-            local function UpdateFooterGradient(phase: number)
-                if not FooterGradient or not FooterGradient.Parent then
-                    return
-                end
-                FooterGradient.Color = ColorSequence.new({
-                    ColorSequenceKeypoint.new(0.0, GetHoloColor(phase)),
-                    ColorSequenceKeypoint.new(0.2, GetHoloColor(phase + 0.2)),
-                    ColorSequenceKeypoint.new(0.4, GetHoloColor(phase + 0.4)),
-                    ColorSequenceKeypoint.new(0.6, GetHoloColor(phase + 0.6)),
-                    ColorSequenceKeypoint.new(0.8, GetHoloColor(phase + 0.8)),
-                    ColorSequenceKeypoint.new(1.0, GetHoloColor(phase + 1.0)),
-                })
+            if WindowInfo.FooterGradient == false then
+                return
             end
+            UpdateFooterGradient(os.clock() * (WindowInfo.FooterGradientSpeed or 0.15))
+        end))
 
-            local AnimSpeed = WindowInfo.FooterGradientSpeed or 0.15
-            UpdateFooterGradient(os.clock() * AnimSpeed)
+        ApplyFooterVisible = function(Visible: boolean)
+            BottomBar.Visible = Visible
+            BottomClip.Visible = Visible
+        end
 
-            Library:GiveSignal(RunService.RenderStepped:Connect(function()
-                if not Library.Toggled or not (ScreenGui and ScreenGui.Parent) then
-                    return
-                end
-                UpdateFooterGradient(os.clock() * AnimSpeed)
-            end))
+        if WindowInfo.FooterVisible == false then
+            ApplyFooterVisible(false)
         end
 
         FooterLabel.InputBegan:Connect(function(Input: InputObject)
@@ -11853,9 +11979,80 @@ function Library:CreateWindow(WindowInfo)
 
     function Window:SetFooterGradient(Enabled: boolean)
         WindowInfo.FooterGradient = Enabled == true
-        if FooterGradient then
-            FooterGradient.Enabled = Enabled == true
+        if Enabled == true then
+            CreateFooterGradient()
+            if FooterGradient then
+                FooterGradient.Enabled = true
+            end
+        else
+            if FooterGradient then
+                FooterGradient.Enabled = false
+            end
         end
+    end
+
+    function Window:SetFooterGradientSpeed(Speed: number)
+        assert(typeof(Speed) == "number", "Expected number for Speed got: " .. typeof(Speed))
+        WindowInfo.FooterGradientSpeed = math.max(0, Speed)
+    end
+
+    function Window:SetFooterVisible(Visible: boolean)
+        local IsVisible = Visible ~= false
+        WindowInfo.FooterVisible = IsVisible
+        ApplyFooterVisible(IsVisible)
+    end
+
+    function Window:ToggleFooter()
+        Window:SetFooterVisible(not WindowInfo.FooterVisible)
+    end
+
+    function Window:SetFooterTransparency(Transparency: number)
+        assert(typeof(Transparency) == "number", "Expected number for Transparency got: " .. typeof(Transparency))
+        Transparency = math.clamp(Transparency, 0, 1)
+        WindowInfo.FooterTransparency = Transparency
+        if FooterLabel then
+            FooterLabel.TextTransparency = Transparency
+            local Cache = TransparencyCache[FooterLabel]
+            if Cache then
+                Cache.TextTransparency = Transparency
+            end
+        end
+    end
+
+    function Window:SetSearchbarTransparency(Transparency: number)
+        assert(typeof(Transparency) == "number", "Expected number for Transparency got: " .. typeof(Transparency))
+        Transparency = math.clamp(Transparency, 0, 1)
+        WindowInfo.SearchbarTransparency = Transparency
+        Library.SearchbarTransparency = Transparency
+        if SearchBox then
+            SearchBox.BackgroundTransparency = Transparency
+            local Cache = TransparencyCache[SearchBox]
+            if Cache then
+                Cache.BackgroundTransparency = Transparency
+            end
+        end
+    end
+
+    function Window:SetGroupboxTransparency(Transparency: number)
+        assert(typeof(Transparency) == "number", "Expected number for Transparency got: " .. typeof(Transparency))
+        Transparency = math.clamp(Transparency, 0, 1)
+        WindowInfo.GroupboxTransparency = Transparency
+        Library:SetGroupboxTransparency(Transparency)
+    end
+
+    function Window:SetOutlineTransparency(Transparency: number)
+        assert(typeof(Transparency) == "number", "Expected number for Transparency got: " .. typeof(Transparency))
+        Transparency = math.clamp(Transparency, 0, 1)
+        WindowInfo.OutlineTransparency = Transparency
+        Library:SetOutlineTransparency(Transparency)
+    end
+
+    function Window:SetGroupboxAnimation(Enabled: boolean)
+        if not WindowInfo.Animations then
+            WindowInfo.Animations = {}
+        end
+        WindowInfo.Animations.Groupbox = Enabled == true
+        Library.Animations.Groupbox = Enabled == true
     end
 
     function Window:SetAlwaysOnTop(Enabled: boolean)
@@ -13167,6 +13364,8 @@ function Library:CreateWindow(WindowInfo)
             do
                 GroupboxHolder = New("Frame", {
                     BackgroundColor3 = "BackgroundColor",
+                    BackgroundTransparency = Library.GroupboxTransparency or 0,
+                    ClipsDescendants = true,
                     Size = UDim2.fromScale(1, 0),
                     Parent = BoxHolder,
                 })
@@ -13321,7 +13520,7 @@ function Library:CreateWindow(WindowInfo)
             local ResizeTween
             local CollapseArrowTween
 
-            function Groupbox:Resize()
+            function Groupbox:Resize(Animated: boolean?)
                 if ResizeTween then
                     StopTween(ResizeTween, true)
                     ResizeTween = nil
@@ -13335,28 +13534,51 @@ function Library:CreateWindow(WindowInfo)
 
                 local TargetSize = UDim2.new(1, 0, 0, if Groupbox.Collapsed then TopSize else (TopSize + 1 + ContainerSize))
                 GroupboxContainer.Size = UDim2.new(1, 0, 0, ContainerSize)
-                GroupboxLine.Visible = not Groupbox.Collapsed
 
-                if Library.Animations and Library.Animations.Groupbox then
-                    local TweenInfo = Library.GroupboxTweenInfo or TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-                    local Tween = TweenService:Create(GroupboxHolder, TweenInfo, { Size = TargetSize })
-                    ResizeTween = Tween
-
-                    local Connection; Connection = Library:GiveSignal(Tween.Completed:Once(function()
-                        if Connection then
-                            Connection:Disconnect()
-                        end
-
-                        if ResizeTween == Tween then
-                            StopTween(ResizeTween, true)
-                            ResizeTween = nil
-                        end
-                    end))
-
-                    Tween:Play()
-                else
+                local Animate = (Animated ~= false) and Library.Animations and Library.Animations.Groupbox
+                if not Animate then
                     GroupboxHolder.Size = TargetSize
+                    GroupboxLine.Visible = not Groupbox.Collapsed
+                    if Groupbox.Collapsed then
+                        GroupboxContainer.Visible = false
+                    else
+                        GroupboxContainer.Visible = true
+                    end
+                    return
                 end
+
+                if Groupbox.Collapsed then
+                    GroupboxLine.Visible = true
+                    GroupboxContainer.Visible = true
+                else
+                    GroupboxLine.Visible = true
+                    GroupboxContainer.Visible = true
+                end
+
+                local TweenInfo = Library.GroupboxTweenInfo or TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                local Tween = TweenService:Create(GroupboxHolder, TweenInfo, { Size = TargetSize })
+                ResizeTween = Tween
+
+                local Connection; Connection = Library:GiveSignal(Tween.Completed:Once(function()
+                    if Connection then
+                        Connection:Disconnect()
+                    end
+
+                    if ResizeTween == Tween then
+                        StopTween(ResizeTween, true)
+                        ResizeTween = nil
+                    end
+
+                    if Groupbox.Collapsed then
+                        GroupboxContainer.Visible = false
+                        GroupboxLine.Visible = false
+                    else
+                        GroupboxContainer.Visible = true
+                        GroupboxLine.Visible = true
+                    end
+                end))
+
+                Tween:Play()
             end
 
             table.insert(Groupbox.Connections, GroupboxList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
@@ -13376,6 +13598,9 @@ function Library:CreateWindow(WindowInfo)
 
             function Groupbox:SetCollapsed(Collapsed: boolean)
                 if Info.DisableCollapsing == true then return end
+                if Groupbox.Collapsed == Collapsed then
+                    return
+                end
                 Groupbox.Collapsed = Collapsed
 
                 if CollapseArrowTween then
@@ -13385,10 +13610,9 @@ function Library:CreateWindow(WindowInfo)
 
                 local TargetRotation = if Collapsed then 0 else 180
 
-                GroupboxContainer.Visible = not Collapsed
                 if Library.Animations and Library.Animations.Groupbox then
-                    local TweenInfo = Library.GroupboxTweenInfo or TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-                    local Tween = TweenService:Create(GroupboxCollapseArrow, TweenInfo, { Rotation = TargetRotation })
+                    local ArrowInfo = Library.RotatingChevronTweenInfo or TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+                    local Tween = TweenService:Create(GroupboxCollapseArrow, ArrowInfo, { Rotation = TargetRotation })
                     CollapseArrowTween = Tween
 
                     local Connection; Connection = Library:GiveSignal(Tween.Completed:Connect(function()
@@ -14702,8 +14926,6 @@ function Library:CreateWindow(WindowInfo)
             if MainScale then
                 BaseScale = Library.DPIScale - (tonumber(Library.ScalesOffset[MainScale]) or 0)
             end
-            local FrameW = if MainFrame.AbsoluteSize.X > 0 then MainFrame.AbsoluteSize.X else (WindowInfo.Size.X.Offset > 0 and WindowInfo.Size.X.Offset or 720)
-            local FrameH = if MainFrame.AbsoluteSize.Y > 0 then MainFrame.AbsoluteSize.Y else (WindowInfo.Size.Y.Offset > 0 and WindowInfo.Size.Y.Offset or 600)
 
             Fading = true
 
@@ -14711,16 +14933,14 @@ function Library:CreateWindow(WindowInfo)
                 ApplyBlur(true, true, AnimTime)
                 CacheAllDescendants()
 
-                local TargetPos = MainFrame.Position
+                --// Scale-only animation: UIScale scales around the frame center,
+                --// so Position offsets are never touched and dragging/resizing
+                --// state survives the toggle. \\--
                 local ScaleFactor = 0.90
-                local OffsetX = FrameW * (1 - ScaleFactor) / 2
-                local OffsetY = FrameH * (1 - ScaleFactor) / 2
-                local StartPos = UDim2.new(TargetPos.X.Scale, TargetPos.X.Offset + OffsetX, TargetPos.Y.Scale, TargetPos.Y.Offset + OffsetY)
 
                 if MainScale then
                     MainScale.Scale = BaseScale * ScaleFactor
                 end
-                MainFrame.Position = StartPos
                 MainFrame.BackgroundTransparency = 1
                 MainFrame.Visible = true
 
@@ -14738,7 +14958,6 @@ function Library:CreateWindow(WindowInfo)
                     TweenService:Create(MainScale, AnimInfo, { Scale = BaseScale }):Play()
                 end
                 TweenService:Create(MainFrame, AnimInfo, {
-                    Position = TargetPos,
                     BackgroundTransparency = WindowInfo.BackgroundTransparency or 0.3,
                 }):Play()
 
@@ -14764,7 +14983,6 @@ function Library:CreateWindow(WindowInfo)
                     if MainScale then
                         MainScale.Scale = BaseScale
                     end
-                    MainFrame.Position = TargetPos
                     MainFrame.BackgroundTransparency = WindowInfo.BackgroundTransparency or 0.3
                     Fading = false
                 end)
@@ -14772,17 +14990,12 @@ function Library:CreateWindow(WindowInfo)
                 ApplyBlur(false, true, AnimTime)
                 RefreshOpenCache()
 
-                local CurrentPos = MainFrame.Position
                 local ScaleFactor = 0.90
-                local OffsetX = FrameW * (1 - ScaleFactor) / 2
-                local OffsetY = FrameH * (1 - ScaleFactor) / 2
-                local EndPos = UDim2.new(CurrentPos.X.Scale, CurrentPos.X.Offset + OffsetX, CurrentPos.Y.Scale, CurrentPos.Y.Offset + OffsetY)
 
                 if MainScale then
                     TweenService:Create(MainScale, AnimInfo, { Scale = BaseScale * ScaleFactor }):Play()
                 end
                 TweenService:Create(MainFrame, AnimInfo, {
-                    Position = EndPos,
                     BackgroundTransparency = 1,
                 }):Play()
 
@@ -14809,7 +15022,6 @@ function Library:CreateWindow(WindowInfo)
                     if MainScale then
                         MainScale.Scale = BaseScale
                     end
-                    MainFrame.Position = CurrentPos
                     Fading = false
                 end)
             end
@@ -15831,6 +16043,7 @@ function Library:Unload()
 
     table.clear(Library.Scales)
     table.clear(Library.ScalesOffset)
+    table.clear(Library.Outlines)
 
     table.clear(Library.Corners)
     table.clear(Library.SpecificCorners)
