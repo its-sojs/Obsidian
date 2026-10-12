@@ -12,7 +12,7 @@
 + Notification animations: Fade / Tween / Resize / None (Library:SetNotifyAnimation, per-notify Animation override)
 + Window open/close animations: Default / Fade-Scale / Fade-Tween / None, with separate In/Out overrides, easing style/direction, time and tween position/offset
 + Dropdown open animations: Grow / Fade / Fade-Grow / None, with menu transparency (Library:SetDropdownAnimation, Dropdown:SetAnimation/SetMenuTransparency)
-+ Keybind panel collapse/expand and transparency (Library:SetKeybindPanelCollapsed/SetKeybindPanelTransparency)
++ Keybind panel transparency (Library:SetKeybindPanelTransparency)
 + Draggable label transparency (DraggableLabel:SetTransparency)
 
 [changes]

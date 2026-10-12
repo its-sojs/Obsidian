@@ -746,13 +746,6 @@ MenuGroup:AddToggle("KeybindMenuOpen", {
 		Library.KeybindFrame.Visible = value
 	end,
 })
-MenuGroup:AddToggle("KeybindPanelCollapsed", {
-	Default = false,
-	Text = "Collapse Keybind Panel",
-	Callback = function(value)
-		Library:SetKeybindPanelCollapsed(value)
-	end,
-})
 MenuGroup:AddSlider("KeybindPanelTransparencySlider", {
 	Text = "Keybind Panel Transparency",
 	Default = 0,

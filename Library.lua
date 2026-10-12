@@ -2840,18 +2840,6 @@ function Library:SetDropdownTransparency(Transparency: number)
     end
 end
 
-function Library:SetKeybindPanelCollapsed(Collapsed: boolean, Animated: boolean?)
-    if Library.KeybindPanel then
-        Library.KeybindPanel:SetCollapsed(Collapsed, Animated)
-    end
-end
-
-function Library:ToggleKeybindPanelCollapsed(Animated: boolean?)
-    if Library.KeybindPanel then
-        Library.KeybindPanel:ToggleCollapsed(Animated)
-    end
-end
-
 function Library:SetKeybindPanelTransparency(Transparency: number)
     if Library.KeybindPanel then
         Library.KeybindPanel:SetTransparency(Transparency)
@@ -3693,22 +3681,6 @@ function Library:AddDraggableMenu(Name: string)
         Parent = Container,
     })
 
-    --// Collapse / expand arrow \\--
-    local CollapseArrow = New("TextButton", {
-        AnchorPoint = Vector2.new(1, 0.5),
-        BackgroundTransparency = 1,
-        Position = UDim2.new(1, -6, 0, 17),
-        Size = UDim2.fromOffset(22, 22),
-        Text = "-",
-        TextSize = 16,
-        ZIndex = 2,
-        Parent = Holder,
-    })
-    if ArrowIcon then
-        CollapseArrow.Text = ""
-        Library:ApplyLucideIcon(CollapseArrow, ArrowIcon, 180)
-    end
-
     Library:MakeDraggable(Holder, Label, true)
 
     if not table.find(Library.DraggableElements, Holder) then
@@ -3718,97 +3690,11 @@ function Library:AddDraggableMenu(Name: string)
     PositionDraggable(Holder, Holder.Position)
 
     local Menu = {
-        Collapsed = false,
         Transparency = 0,
 
         Holder = Holder,
         Container = Container,
     }
-    local CollapseTween = nil
-
-    local function MeasureFullHeight(): number
-        local List = Container:FindFirstChildOfClass("UIListLayout")
-        local Content = (List and List.AbsoluteContentSize.Y) or 0
-        return 35 + (Content / Library.DPIScale) + 14
-    end
-
-    function Menu:SetCollapsed(Collapsed: boolean, Animated: boolean?)
-        Collapsed = Collapsed == true
-        if Menu.Collapsed == Collapsed and CollapseTween == nil then
-            return
-        end
-        Menu.Collapsed = Collapsed
-
-        if CollapseTween then
-            StopTween(CollapseTween, true)
-            CollapseTween = nil
-        end
-
-        if ArrowIcon then
-            local TargetRotation = if Collapsed then 0 else 180
-            local ArrowInfo = Library.RotatingChevronTweenInfo or TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-            CollapseArrow.Rotation = TargetRotation
-            pcall(function()
-                TweenService:Create(CollapseArrow, ArrowInfo, { Rotation = TargetRotation }):Play()
-            end)
-        else
-            CollapseArrow.Text = if Collapsed then "+" else "-"
-        end
-
-        if Animated == false then
-            Container.Visible = not Collapsed
-            Holder.AutomaticSize = Enum.AutomaticSize.XY
-            return
-        end
-
-        local ScaleFactor = Library.DPIScale
-        local Abs = Holder.AbsoluteSize
-        local Width = Abs.X / ScaleFactor
-
-        if Collapsed then
-            Holder.AutomaticSize = Enum.AutomaticSize.X
-            Holder.Size = UDim2.fromOffset(Width, Abs.Y / ScaleFactor)
-            local Tween = TweenService:Create(Holder, Library.GroupboxTweenInfo, { Size = UDim2.fromOffset(Width, 35) })
-            CollapseTween = Tween
-            local Connection; Connection = Library:GiveSignal(Tween.Completed:Once(function()
-                if Connection then
-                    Connection:Disconnect()
-                end
-                if CollapseTween == Tween then
-                    StopTween(CollapseTween, true)
-                    CollapseTween = nil
-                end
-                if Menu.Collapsed then
-                    Container.Visible = false
-                    Holder.AutomaticSize = Enum.AutomaticSize.XY
-                end
-            end))
-            Tween:Play()
-        else
-            Container.Visible = true
-            Holder.AutomaticSize = Enum.AutomaticSize.X
-            Holder.Size = UDim2.fromOffset(Width, 35)
-            local Tween = TweenService:Create(Holder, Library.GroupboxTweenInfo, { Size = UDim2.fromOffset(Width, MeasureFullHeight()) })
-            CollapseTween = Tween
-            local Connection; Connection = Library:GiveSignal(Tween.Completed:Once(function()
-                if Connection then
-                    Connection:Disconnect()
-                end
-                if CollapseTween == Tween then
-                    StopTween(CollapseTween, true)
-                    CollapseTween = nil
-                end
-                if not Menu.Collapsed then
-                    Holder.AutomaticSize = Enum.AutomaticSize.XY
-                end
-            end))
-            Tween:Play()
-        end
-    end
-
-    function Menu:ToggleCollapsed(Animated: boolean?)
-        Menu:SetCollapsed(not Menu.Collapsed, Animated)
-    end
 
     function Menu:SetTransparency(Transparency: number)
         assert(typeof(Transparency) == "number", "Expected number for Transparency got: " .. typeof(Transparency))
@@ -3824,10 +3710,6 @@ function Library:AddDraggableMenu(Name: string)
     function Menu:SetVisible(Visible: boolean)
         Holder.Visible = Visible ~= false
     end
-
-    CollapseArrow.MouseButton1Click:Connect(function()
-        Menu:ToggleCollapsed()
-    end)
 
     return Holder, Container, Menu
 end
