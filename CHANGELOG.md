@@ -17,6 +17,8 @@
 
 [changes]
 + Window toggle animation is scale-only and no longer touches Position offsets, so drag/resize state survives toggling
++ Acrylic/Mica now restyle the window Fluent-style: theme tint + top sheen paint stack with stronger backdrop blur (Acrylic)
++ Outline transparency now follows every UIStroke in the UI, including popups and notifications
 + Footer gradient is created lazily, so SetFooterGradient works even when created with FooterGradient = false
 + Example menu: BlurBackgroundToggle replaced by BackgroundBlurMode dropdown (default is now the plain frame)
 

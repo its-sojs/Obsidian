@@ -11631,6 +11631,9 @@ function Library:CreateWindow(WindowInfo)
     local BottomBackgroundCorner
     local BottomClip
     local BottomBar
+    local MaterialTint
+    local MaterialSheen
+    local SheenGradient
     local FooterLabel
     local FooterGradient
     local CreateFooterGradient
@@ -11843,6 +11846,51 @@ function Library:CreateWindow(WindowInfo)
         })
         table.insert(Library.Scales, MainScale)
         Library:AddOutline(MainFrame)
+
+        --// Material paint stack (Fluent-style Acrylic/Mica): backdrop blur comes
+        --// from the lighting blur effect, these layers add the tint + top sheen.
+        --// ZIndex 0 keeps them behind all window content. \\--
+        MaterialTint = New("Frame", {
+            BackgroundColor3 = function()
+                return Library:GetBetterColor(Library.Scheme.BackgroundColor, 14)
+            end,
+            BackgroundTransparency = 1,
+            Size = UDim2.fromScale(1, 1),
+            Visible = false,
+            ZIndex = 0,
+            Parent = MainFrame,
+        })
+        table.insert(
+            Library.Corners,
+            New("UICorner", {
+                CornerRadius = UDim.new(0, WindowInfo.CornerRadius),
+                Parent = MaterialTint,
+            })
+        )
+
+        MaterialSheen = New("Frame", {
+            BackgroundColor3 = Color3.new(1, 1, 1),
+            BackgroundTransparency = 1,
+            Size = UDim2.fromScale(1, 1),
+            Visible = false,
+            ZIndex = 0,
+            Parent = MainFrame,
+        })
+        table.insert(
+            Library.Corners,
+            New("UICorner", {
+                CornerRadius = UDim.new(0, WindowInfo.CornerRadius),
+                Parent = MaterialSheen,
+            })
+        )
+        SheenGradient = New("UIGradient", {
+            Rotation = 90,
+            Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.65),
+                NumberSequenceKeypoint.new(1, 0.92),
+            }),
+            Parent = MaterialSheen,
+        })
         Library:MakeLine(MainFrame, {
             Position = UDim2.fromOffset(0, 48),
             Size = UDim2.new(1, 0, 0, 1),
@@ -12435,12 +12483,13 @@ function Library:CreateWindow(WindowInfo)
     local function GetMaterialTransparency(): number
         local Base = WindowInfo.BackgroundTransparency or 0.3
         if WindowInfo.BackgroundType == "Acrylic" then
-            return math.clamp(Base + 0.2, 0, 0.85)
+            return math.clamp(Base + 0.25, 0, 0.9)
         end
         return Base
     end
 
     local function ApplyBackgroundMaterial(Animated: boolean?)
+        local BType = WindowInfo.BackgroundType
         local Target = GetMaterialTransparency()
         if MainFrame then
             MainFrame.BackgroundTransparency = Target
@@ -12449,16 +12498,50 @@ function Library:CreateWindow(WindowInfo)
                 Cache.BackgroundTransparency = Target
             end
         end
-        if WindowInfo.BackgroundType == "Acrylic" then
+
+        --// Paint stack: Acrylic = lifted tint + strong top sheen, Mica = subtle tint + faint sheen \\--
+        local ShowPaint = (BType == "Acrylic" or BType == "Mica")
+        local TintTrans = 1
+        if BType == "Acrylic" then
+            TintTrans = 0.3
+            if SheenGradient then
+                SheenGradient.Transparency = NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 0.65),
+                    NumberSequenceKeypoint.new(1, 0.92),
+                })
+            end
+        elseif BType == "Mica" then
+            TintTrans = 0.55
+            if SheenGradient then
+                SheenGradient.Transparency = NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 0.82),
+                    NumberSequenceKeypoint.new(1, 1),
+                })
+            end
+        end
+        for _, Overlay in { MaterialTint, MaterialSheen } do
+            if Overlay then
+                Overlay.Visible = ShowPaint
+                if Overlay == MaterialTint then
+                    Overlay.BackgroundTransparency = TintTrans
+                end
+                local Cache = TransparencyCache[Overlay]
+                if Cache then
+                    Cache.BackgroundTransparency = Overlay.BackgroundTransparency
+                end
+            end
+        end
+
+        if BType == "Acrylic" then
             WindowInfo.BackgroundBlurMode = "Blur"
             WindowInfo.Blur = true
-            if (WindowInfo.BlurSize or 0) < 12 then
-                WindowInfo.BlurSize = 16
+            if (WindowInfo.BlurSize or 0) < 20 then
+                WindowInfo.BlurSize = 24
             end
             if Library.Toggled then
                 ApplyBlur(true, Animated ~= false, 0.25)
             end
-        elseif WindowInfo.BackgroundType == "Mica" then
+        elseif BType == "Mica" then
             WindowInfo.BackgroundBlurMode = "Default"
             WindowInfo.Blur = false
             ApplyBlur(false, Animated ~= false, 0.25)
