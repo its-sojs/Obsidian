@@ -42,7 +42,7 @@ local Window = Library:CreateWindow({
 	WindowAnimation = "Default", -- "Default" (= Fade/Scale), "Fade/Scale", "Fade/Tween", "None"
 	-- WindowAnimationIn / WindowAnimationOut override open vs close separately ("Same" clears the override)
 	-- WindowEasingStyle = "Quart", WindowEasingDirection = "Out", WindowAnimationTime = 0.25
-	-- WindowTweenPosition = "Center", WindowTweenOffset = 40 (used by Fade/Tween)
+	-- WindowTweenPosition = "Bottom", WindowTweenOffset = 40 (used by Fade/Tween: Bottom/Top/Left/Right)
 })
 
 -- CALLBACK NOTE:
@@ -920,7 +920,7 @@ MenuGroup:AddToggle("ToggleWindowAnimation", {
 })
 MenuGroup:AddDropdown("WindowAnimationPreset", {
 	Values = { "Default", "Fade/Scale", "Fade/Tween", "None" },
-	Default = "Default",
+	Default = "None",
 	Text = "Open + Close Animation",
 	Callback = function(Value)
 		Window:SetWindowAnimation(Value)
@@ -969,8 +969,8 @@ MenuGroup:AddSlider("WindowAnimationTime", {
 	end
 })
 MenuGroup:AddDropdown("WindowTweenPosition", {
-	Values = { "Center", "Top", "Bottom", "Left", "Right" },
-	Default = "Center",
+	Values = { "Bottom", "Top", "Left", "Right" },
+	Default = "Bottom",
 	Text = "Tween Position",
 	Callback = function(Value)
 		Window:SetWindowTween(Value)

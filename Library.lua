@@ -474,11 +474,11 @@ local Templates = {
         TabSwipeFrom = "bottom",
 
         --// Window open/close animation \\--
-        WindowAnimation = "Default",
+        WindowAnimation = "None",
         WindowAnimationTime = 0.25,
         WindowEasingStyle = "Quart",
         WindowEasingDirection = "Out",
-        WindowTweenPosition = "Center",
+        WindowTweenPosition = "Bottom",
         WindowTweenOffset = 40,
         TabButtonsStyle = {
             Gap = 0,
@@ -11564,20 +11564,35 @@ function Library:CreateWindow(WindowInfo)
 
     local function GetTweenOffsetVector(): Vector2
         local Offset = math.clamp(tonumber(WindowInfo.WindowTweenOffset) or 40, 0, 200)
-        local PosName = string.lower(tostring(WindowInfo.WindowTweenPosition or "center"))
+        local PosName = string.lower(tostring(WindowInfo.WindowTweenPosition or "bottom"))
         if PosName == "top" then
             return Vector2.new(0, -Offset)
-        elseif PosName == "bottom" then
-            return Vector2.new(0, Offset)
         elseif PosName == "left" then
             return Vector2.new(-Offset, 0)
         elseif PosName == "right" then
             return Vector2.new(Offset, 0)
         end
-        --// Center: symmetric zoom offset (classic behavior) \\--
-        local W = (MainFrame and MainFrame.AbsoluteSize.X > 0) and MainFrame.AbsoluteSize.X or (WindowInfo.Size.X.Offset > 0 and WindowInfo.Size.X.Offset or 720)
-        local H = (MainFrame and MainFrame.AbsoluteSize.Y > 0) and MainFrame.AbsoluteSize.Y or (WindowInfo.Size.Y.Offset > 0 and WindowInfo.Size.Y.Offset or 600)
-        return Vector2.new(W * 0.05, H * 0.05)
+        return Vector2.new(0, Offset)
+    end
+
+    --// Centered Fade/Scale: temporarily pivot the frame around its center so the
+    --// zoom is symmetric, then restore the original anchor/position exactly. \\--
+    local SavedAnchor, SavedPos
+    local function BeginCenteredScale()
+        SavedAnchor = MainFrame.AnchorPoint
+        SavedPos = MainFrame.Position
+        local Size = MainFrame.Size
+        MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+        MainFrame.Position = UDim2.new(
+            SavedPos.X.Scale, SavedPos.X.Offset + Size.X.Offset / 2,
+            SavedPos.Y.Scale, SavedPos.Y.Offset + Size.Y.Offset / 2
+        )
+    end
+    local function EndCenteredScale()
+        MainFrame.AnchorPoint = SavedAnchor or Vector2.new(0, 0)
+        if SavedPos then
+            MainFrame.Position = SavedPos
+        end
     end
     local ProfilePanel
     local ProfileDivider
@@ -15706,10 +15721,15 @@ function Library:CreateWindow(WindowInfo)
                     StartPos = UDim2.new(TargetPos.X.Scale, TargetPos.X.Offset + Slide.X, TargetPos.Y.Scale, TargetPos.Y.Offset + Slide.Y)
                 end
 
+                if UseScale then
+                    BeginCenteredScale()
+                end
                 if MainScale then
                     MainScale.Scale = if UseScale then ScaleClosed else BaseScale
                 end
-                MainFrame.Position = StartPos
+                if UseSlide then
+                    MainFrame.Position = StartPos
+                end
                 MainFrame.BackgroundTransparency = 1
                 MainFrame.Visible = true
                 SnapAllToTransparent()
@@ -15739,7 +15759,11 @@ function Library:CreateWindow(WindowInfo)
                         if MainScale then
                             MainScale.Scale = BaseScale
                         end
-                        MainFrame.Position = TargetPos
+                        if UseScale then
+                            EndCenteredScale()
+                        else
+                            MainFrame.Position = TargetPos
+                        end
                         MainFrame.BackgroundTransparency = MaterialTrans
                         Fading = false
                     end)
@@ -15763,6 +15787,9 @@ function Library:CreateWindow(WindowInfo)
                     ApplyBlur(false, false)
                     Fading = false
                 else
+                    if UseScale then
+                        BeginCenteredScale()
+                    end
                     ApplyBlur(false, true, AnimTime)
                     if UseScale and MainScale then
                         TweenService:Create(MainScale, AnimInfo, { Scale = ScaleClosed }):Play()
@@ -15779,7 +15806,11 @@ function Library:CreateWindow(WindowInfo)
                         if MainScale then
                             MainScale.Scale = BaseScale
                         end
-                        MainFrame.Position = CurrentPos
+                        if UseScale then
+                            EndCenteredScale()
+                        else
+                            MainFrame.Position = CurrentPos
+                        end
                         Fading = false
                     end)
                 end
