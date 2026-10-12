@@ -10,7 +10,7 @@
 + Sidebar position Left / Right (Window:SetSidebarPosition/GetSidebarPosition)
 + Groupbox collapse/expand animation with chevron tween (Window:SetGroupboxAnimation)
 + Notification animations: Fade / Tween / Resize / None (Library:SetNotifyAnimation, per-notify Animation override)
-+ Window open/close animations: Default / Fade-Scale / Fade-Tween / None, with separate In/Out overrides, easing style/direction, time and tween position/offset
++ Window open/close animations: Fade-Scale (centered zoom) / Fade-Tween / None (default None), with separate In/Out overrides, easing style/direction, time and tween position (Bottom/Top/Left/Right) with offset
 + Dropdown open animations: Grow / Fade / Fade-Grow / None, with menu transparency (Library:SetDropdownAnimation, Dropdown:SetAnimation/SetMenuTransparency)
 + Keybind panel transparency (Library:SetKeybindPanelTransparency)
 + Draggable label transparency (DraggableLabel:SetTransparency)
